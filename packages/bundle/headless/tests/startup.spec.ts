@@ -173,8 +173,15 @@ describe('headless command-line provider', () => {
     expect(task).toMatchObject({ permissionMode: 'workspace-write', additionalWritableRoots: [directory], task: 'do it' })
   })
 
+  it('accepts explicit provider and model options', async () => {
+    const { task } = await bootStartup(['--provider', 'external-cli', '--model', 'claude', 'do it'])
+    expect(task).toMatchObject({ provider: 'external-cli', model: 'claude', task: 'do it' })
+  })
+
   it.each([
     ['--permission-mode', ' '],
+    ['--provider', ' '],
+    ['--model', ' '],
     ['--add-dir', 'relative'],
     ['--add-dir', ''],
     ['--add-dir', `${join(tmpdir(), 'grant')}\0invalid`],
@@ -185,7 +192,7 @@ describe('headless command-line provider', () => {
     expect(JSON.parse(observed.out)).toMatchObject({ type: 'error' })
   })
 
-  it.each(['--add-dir', '--permission-mode', '--approval-policy'])('does not treat an operand of %s as the JSON flag', async (option) => {
+  it.each(['--add-dir', '--permission-mode', '--approval-policy', '--provider', '--model'])('does not treat an operand of %s as the JSON flag', async (option) => {
     const { observed } = await bootStartup([option, '--json', 'do it'])
     expect(observed.out).not.toContain('"type":"error"')
   })

@@ -1335,7 +1335,27 @@ describe('headless runner', () => {
 
   it('validates config: the task and run options are optional', () => {
     expect(new Config({})).toEqual({})
-    expect(new Config({ task: 'x', sessionId: 'session-x', json: true }))
-      .toEqual({ task: 'x', sessionId: 'session-x', json: true })
+    expect(new Config({ task: 'x', sessionId: 'session-x', json: true, provider: 'external-cli', model: 'claude' }))
+      .toEqual({ task: 'x', sessionId: 'session-x', json: true, provider: 'external-cli', model: 'claude' })
+  })
+
+  it('applies configured provider and model to agent options', async () => {
+    const ctx = new Context()
+    let capturedOptions: unknown
+    internals.stdout = { write: () => true }
+    internals.stderr = { write: () => true }
+    ctx.provide('appExit', () => {})
+    ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'default-p', model: 'default-m' }) } as never)
+    ctx.provide('sessions', { flush: () => Promise.resolve(true) } as never)
+    ctx.provide('agents', {
+      create: (options: { agentOptions: unknown }) => {
+        capturedOptions = options.agentOptions
+        return Promise.reject(new Error('stop here'))
+      },
+    } as never)
+    apply(ctx, { task: 't', provider: 'external-cli', model: 'claude' })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(capturedOptions).toEqual({ provider: 'external-cli', model: 'claude' })
+    await ctx.fiber.dispose()
   })
 })

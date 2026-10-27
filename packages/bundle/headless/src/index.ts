@@ -56,6 +56,10 @@ export interface Config {
   permissionMode?: string
   /** Approval behavior applied after preset selection; an explicit CLI flag takes precedence. Omission keeps current policy. */
   approvalPolicy?: ApprovalPolicy
+  /** Model provider (e.g. external-cli, deepseek-official); absent uses default model selection. */
+  provider?: string
+  /** Model identifier or external CLI tool name; absent uses default model selection. */
+  model?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -64,6 +68,8 @@ export const Config: z<Config> = z.object({
   json: z.boolean(),
   permissionMode: z.string(),
   approvalPolicy: z.union([...APPROVAL_POLICIES]),
+  provider: z.string(),
+  model: z.string(),
 })
 
 /** Outcome of one owned run interval. */
@@ -363,7 +369,14 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   }
 
   const selection = defaultModel.currentSelection()
-  const agentOptions: AgentOptions = { ...selection }
+  const provider = startup?.provider ?? config.provider ?? selection.provider
+  const model = startup?.model ?? config.model ?? selection.model
+  const modelSelection = {
+    ...selection,
+    provider,
+    model,
+  }
+  const agentOptions: AgentOptions = { ...modelSelection }
   // This bundle composes no preset roster, so the model-facing rows sit in the
   // host plane and the agent reads them from the global layer. A deployment
   // that DOES configure one has to join it here first
@@ -372,7 +385,7 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
     // A resumed Session continues with this run's configured model.
     if (config.sessionId !== undefined) {
       const previous = agent.model.current()
-      const configured = { ...selection }
+      const configured = { ...modelSelection }
       if (configured.reasoningEffort === undefined && previous !== undefined
         && previous.provider === configured.provider && previous.model === configured.model
         && previous.reasoningEffort !== undefined) {

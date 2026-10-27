@@ -37,6 +37,10 @@ export interface HeadlessStartupValues {
   approvalPolicy?: ApprovalPolicy
   /** Explicit absolute write grants for this invocation; absent adds no directories. */
   additionalWritableRoots?: string[]
+  /** Model provider (e.g. external-cli, deepseek-official); absent preserves default model. */
+  provider?: string
+  /** Model identifier or external CLI tool name; absent preserves default model. */
+  model?: string
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -62,6 +66,8 @@ function headlessCommand(): Command {
       .choices([...APPROVAL_POLICIES]))
     .option('--add-dir <path>', 'allow an additional physical absolute directory under workspace-write (repeatable)',
       (value: string, previous?: string[]) => [...previous ?? [], value])
+    .option('--provider <provider>', 'select the model provider (e.g. external-cli, deepseek-official)')
+    .option('--model <model>', 'select the model or external CLI tool name')
     .argument('[task...]', 'the task text; multiple words are joined by spaces, and `-` reads stdin')
     .addHelpText('after', `
 Examples:
@@ -71,6 +77,8 @@ Examples:
   dsh --profile headless --session-id session-… "continue"   resume an existing Session
   dsh --profile headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
                                                         grant shared Git metadata for this task
+  dsh --profile headless --provider external-cli --model claude "refactor this"
+                                                        use an external local CLI provider
 `)
 }
 
@@ -86,7 +94,7 @@ function jsonRequested(argv: readonly string[]): boolean {
     const argument = argv[index]
     if (argument === '--') return false
     if (argument === '--json') return true
-    if (argument === '--session-id' || argument === '--permission-mode' || argument === '--approval-policy' || argument === '--add-dir') index += 1
+    if (argument === '--session-id' || argument === '--permission-mode' || argument === '--approval-policy' || argument === '--add-dir' || argument === '--provider' || argument === '--model') index += 1
   }
   return false
 }
@@ -132,6 +140,8 @@ export function apply(ctx: Context): void {
       permissionMode?: string
       approvalPolicy?: ApprovalPolicy
       addDir?: string[]
+      provider?: string
+      model?: string
     }>()
     // A SessionId is opaque, so whitespace is part of the identity: validate
     // emptiness on the trimmed value but hand the runner the exact string.
@@ -145,6 +155,14 @@ export function apply(ctx: Context): void {
     if (options.addDir?.some(path => !isAbsolute(path) || path.includes('\0')) === true) {
       program.error('error: --add-dir requires an absolute directory path in the execution environment')
     }
+    const provider = options.provider?.trim()
+    if (options.provider !== undefined && provider === '') {
+      program.error('error: --provider requires a non-empty provider name')
+    }
+    const model = options.model?.trim()
+    if (options.model !== undefined && model === '') {
+      program.error('error: --model requires a non-empty model identifier')
+    }
     ctx.provide(HEADLESS_STARTUP_SERVICE, {
       task,
       sessionId,
@@ -152,6 +170,8 @@ export function apply(ctx: Context): void {
       ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode.trim() },
       ...options.approvalPolicy === undefined ? {} : { approvalPolicy: options.approvalPolicy },
       ...options.addDir === undefined ? {} : { additionalWritableRoots: [...new Set(options.addDir)] },
+      ...provider === undefined ? {} : { provider },
+      ...model === undefined ? {} : { model },
     } satisfies HeadlessStartupValues)
   })
   parseCmdline(ctx, program)
