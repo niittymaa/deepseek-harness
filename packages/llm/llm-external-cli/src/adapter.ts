@@ -1,0 +1,92 @@
+/**
+ * External CLI provider adapter for the DeepSeek Harness LLM seam.
+ *
+ * @module @deepseek-ai/dsh-llm-external-cli/adapter
+ */
+
+import {
+  LlmAdapter,
+  type GenerateOptions,
+  type LlmModelInfo,
+  type LlmProviderInfo,
+  type LlmResolvedModelInfo,
+  type StreamChunk,
+} from '@deepseek-ai/dsh-llm'
+import type { ExternalCliOptions } from './config.ts'
+import { streamExternalCli } from './process.ts'
+
+/** Default context window token limit for external CLI models. */
+export const DEFAULT_CONTEXT_WINDOW = 128000
+
+/**
+ * Adapter that dispatches LLM requests to a local CLI command via stdin/stdout.
+ */
+export class ExternalCliAdapter extends LlmAdapter {
+  /**
+   * Create a new ExternalCliAdapter instance.
+   * @param config - Provider configuration options.
+   */
+  constructor(private readonly config: ExternalCliOptions = {}) {
+    super()
+  }
+
+  /**
+   * Return display metadata for the provider route.
+   * @param provider - Route identifier.
+   * @returns Provider display info.
+   */
+  override providerInfo(provider: string): LlmProviderInfo {
+    return { id: provider, name: 'External CLI' }
+  }
+
+  /**
+   * List discoverable models for the external CLI provider.
+   * @param provider - Route identifier.
+   * @returns List of model descriptors.
+   */
+  override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    const known = ['agy', 'codex', 'claude', 'copilot']
+    const models: LlmModelInfo[] = known.map(id => ({
+      provider,
+      id,
+      name: `${id.charAt(0).toUpperCase() + id.slice(1)} CLI`,
+    }))
+    if (this.config.command !== undefined && !known.includes(this.config.command.toLowerCase())) {
+      models.unshift({
+        provider,
+        id: this.config.command,
+        name: `${this.config.command} (configured)`,
+      })
+    }
+    return Promise.resolve(models)
+  }
+
+  /**
+   * Resolve exact model metadata without requiring network lookups.
+   * @param provider - Route identifier.
+   * @param model - Model identifier.
+   * @param _signal - Optional abort signal.
+   * @returns Resolved model metadata with default context window.
+   */
+  override resolveModel(
+    provider: string,
+    model: string,
+    _signal?: AbortSignal,
+  ): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+      context: { contextWindow: DEFAULT_CONTEXT_WINDOW },
+    })
+  }
+
+  /**
+   * Stream model chunks by invoking the configured CLI tool via stdin/stdout.
+   * @param options - Full generate options.
+   * @returns Async iterable yielding canonical StreamChunks.
+   */
+  override stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    return streamExternalCli(this.config, options)
+  }
+}

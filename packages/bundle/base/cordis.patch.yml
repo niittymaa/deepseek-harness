@@ -135,6 +135,10 @@
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
 
+    # External local LLM CLIs (agy, codex, claude, copilot, etc.) as backend providers.
+    - id: llm-external-cli
+      name: '@deepseek-ai/dsh-llm-external-cli'
+
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
       config:
