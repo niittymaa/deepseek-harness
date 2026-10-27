@@ -108,13 +108,21 @@ export function resolveCommandAndArgs(
   config: ExternalCliOptions,
   options: GenerateOptions,
 ): { command: string; args: string[] } {
-  let command = config.command
-  let args = config.args !== undefined ? [...config.args] : undefined
+  const profile = config.providers?.[options.provider] ?? config.providers?.[options.model]
+  let command = profile?.command ?? config.command
+  let args = profile?.args !== undefined
+    ? [...profile.args]
+    : config.args !== undefined
+      ? [...config.args]
+      : undefined
 
   if (command === undefined || command.trim().length === 0) {
     const rawModel = options.model.trim()
     const modelLower = rawModel.toLowerCase()
-    if (modelLower === 'agy' || modelLower === 'codex' || modelLower === 'claude' || modelLower === 'copilot') {
+    const providerLower = options.provider.trim().toLowerCase()
+    if (providerLower === 'agy' || providerLower === 'codex' || providerLower === 'claude' || providerLower === 'copilot') {
+      command = providerLower
+    } else if (modelLower === 'agy' || modelLower === 'codex' || modelLower === 'claude' || modelLower === 'copilot') {
       command = modelLower
     } else {
       command = rawModel || 'claude'
@@ -148,9 +156,10 @@ export async function* streamExternalCli(
   config: ExternalCliOptions,
   options: GenerateOptions,
 ): AsyncIterable<StreamChunk> {
+  const profile = config.providers?.[options.provider] ?? config.providers?.[options.model]
   const prompt = formatPrompt(options)
   const { command, args } = resolveCommandAndArgs(config, options)
-  const shell = config.shell ?? false
+  const shell = profile?.shell ?? config.shell ?? false
 
   let proc: ReturnType<typeof spawn>
   try {
@@ -204,7 +213,7 @@ export async function* streamExternalCli(
   })
 
   let timeoutTimer: NodeJS.Timeout | undefined
-  const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const timeoutMs = profile?.timeoutMs ?? config.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
   const abortListener = (): void => {
     try {

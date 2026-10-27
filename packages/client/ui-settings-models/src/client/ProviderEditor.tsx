@@ -44,7 +44,7 @@ import { ApiKeyInput } from './ApiKeyInput.tsx'
 import styles from './ModelsSection.module.css'
 
 /** Per-adapter-family curated field sets (unknown namespaces get the hint alone). */
-type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
+type EditorLayout = 'deepseek' | 'pi-ai' | 'cli' | 'unknown'
 
 
 
@@ -154,6 +154,7 @@ export function pathOps(
 function layoutOf(ns: string): EditorLayout {
   if (ns === 'llm-deepseek') return 'deepseek'
   if (ns === 'llm-pi-ai') return 'pi-ai'
+  if (ns === 'llm-external-cli') return 'cli'
   return 'unknown'
 }
 
@@ -274,6 +275,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
     if (props.credentialOnly !== true) {
+      if (layout === 'cli') {
+        const cmd = stringAt(draft, 'command')
+        if (cmd === undefined || cmd.trim().length === 0) {
+          return t('cliCommandRequired')
+        }
+      }
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
@@ -305,7 +312,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setExpectedRevision(written.view.revision)
       setDraft(next)
     }
-    if (keyValue.length > 0) {
+    if (layout !== 'cli' && keyValue.length > 0) {
       const stored = await operations.storeCredential(keyRef, keyValue)
       if (stored !== undefined) return stored
     }
@@ -351,7 +358,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    * narrowed so the per-family branches below are total: an unknown namespace
    * renders the hint instead and never reaches this body.
    */
-  const curatedFields = (family: 'deepseek' | 'pi-ai'): ReactNode => {
+  const curatedFields = (family: 'deepseek' | 'pi-ai' | 'cli'): ReactNode => {
     // What a hand-declared route names for itself and nothing else can supply.
     // A whole-section `llm-deepseek` profile is a composition fact with no
     // per-route identity for its schema to carry, hence the family test.
@@ -412,6 +419,56 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         setDraft(current => schema.setPath(current, ['models'], next))
       },
       onReset: () => { setDraft(current => schema.deletePath(current, ['models'])) },
+    }
+    if (family === 'cli') {
+      const currentArgs = Array.isArray(draft['args'])
+        ? (draft['args'] as string[]).join(' ')
+        : (stringAt(draft, 'args') ?? '')
+      return (
+        <>
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('cliDisplayName')}</span>
+            <input
+              className={styles['input']}
+              type="text"
+              value={stringAt(draft, 'displayName') ?? ''}
+              placeholder={props.displayName}
+              aria-label={t('cliDisplayName')}
+              disabled={disabled}
+              onChange={(event) => { setField('displayName', event.target.value) }}
+            />
+          </div>
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('cliCommand')}</span>
+            <input
+              className={styles['input']}
+              type="text"
+              value={stringAt(draft, 'command') ?? ''}
+              placeholder={t('cliCommandPlaceholder')}
+              aria-label={t('cliCommand')}
+              disabled={disabled}
+              onChange={(event) => { setField('command', event.target.value) }}
+            />
+          </div>
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('cliArgs')}</span>
+            <input
+              className={styles['input']}
+              type="text"
+              value={currentArgs}
+              placeholder={t('cliArgsPlaceholder')}
+              aria-label={t('cliArgs')}
+              disabled={disabled}
+              onChange={(event) => {
+                const raw = event.target.value
+                const parts = raw.trim().length > 0 ? raw.trim().split(/\s+/) : []
+                setDraft(current => schema.setPath(current, ['args'], parts))
+              }}
+            />
+          </div>
+          <p className={styles['advancedHint']}>{t('cliArgsHint')}</p>
+        </>
+      )
     }
     return (
       <>
@@ -570,8 +627,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         busy={busy}
         submitDisabled={disabled || layout === 'unknown'
           || (props.credentialOnly !== true && modelFailure !== undefined)
-          || shownKeyFailure !== undefined
-          || (props.credentialRequired === true && keyValue.length === 0)}
+          || (layout !== 'cli' && shownKeyFailure !== undefined)
+          || (layout !== 'cli' && props.credentialRequired === true && keyValue.length === 0)
+          || (layout === 'cli' && (stringAt(draft, 'command')?.trim().length ?? 0) === 0)}
         submitLabelKey={props.submitLabelKey ?? 'apply'}
         submitBusyLabelKey={props.submitBusyLabelKey ?? 'applying'}
         {...props.cancelLabelKey === undefined ? {} : { cancelLabelKey: props.cancelLabelKey }}

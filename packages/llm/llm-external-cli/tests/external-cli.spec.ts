@@ -316,4 +316,47 @@ describe('Cordis plugin registration', () => {
     expect(assembler.finish).toEqual({ kind: 'stop' })
     expect(assembler.blocks()[0]?.type).toBe('text')
   })
+
+  it('registers configured profiles in directory and resolves per-provider settings', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmExternalCli, {
+      providers: {
+        agy: {
+          command: process.execPath,
+          args: ['-e', 'process.stdout.write("Hello from Agy CLI")'],
+          displayName: 'Agy Assistant',
+        },
+      },
+    })
+
+    const configurable = ctx.llm.listConfigurableProviders()
+    const agyEntry = configurable.find(entry => entry.provider === 'agy')
+    expect(agyEntry).toBeDefined()
+    expect(agyEntry?.displayName).toBe('Agy Assistant')
+    expect(agyEntry?.settingsNs).toBe('llm-external-cli')
+    expect(agyEntry?.settingsPath).toEqual(['providers', 'agy'])
+
+    const providers = ctx.llm.listProviders()
+    const info = providers.find(p => p.id === 'agy')
+    expect(info?.name).toBe('Agy Assistant')
+
+    const stream = ctx.llm.stream({
+      provider: 'agy',
+      model: 'agy',
+      messages: [
+        createUserMessage({
+          content: [{ type: 'text', text: 'Hi' }],
+          source: { kind: 'user' },
+        }),
+      ],
+    })
+
+    const assembler = new BlockAssembler()
+    for await (const chunk of stream) {
+      assembler.push(chunk)
+    }
+    expect(assembler.finish).toEqual({ kind: 'stop' })
+    expect(assembler.blocks()).toEqual([{ type: 'text', text: 'Hello from Agy CLI' }])
+  })
 })

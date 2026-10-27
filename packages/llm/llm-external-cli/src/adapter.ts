@@ -18,16 +18,35 @@ import { streamExternalCli } from './process.ts'
 /** Default context window token limit for external CLI models. */
 export const DEFAULT_CONTEXT_WINDOW = 128000
 
+/** Known preset names mapped to friendly titles. */
+const PRESET_NAMES: Record<string, string> = {
+  agy: 'Agy CLI',
+  claude: 'Claude Code CLI',
+  codex: 'Codex CLI',
+  copilot: 'GitHub Copilot CLI',
+}
+
 /**
  * Adapter that dispatches LLM requests to a local CLI command via stdin/stdout.
  */
 export class ExternalCliAdapter extends LlmAdapter {
+  private config: ExternalCliOptions
+
   /**
    * Create a new ExternalCliAdapter instance.
    * @param config - Provider configuration options.
    */
-  constructor(private readonly config: ExternalCliOptions = {}) {
+  constructor(config: ExternalCliOptions = {}) {
     super()
+    this.config = config
+  }
+
+  /**
+   * Update effective adapter configuration on live settings changes.
+   * @param config - New external CLI options.
+   */
+  updateConfig(config: ExternalCliOptions): void {
+    this.config = config
   }
 
   /**
@@ -36,7 +55,11 @@ export class ExternalCliAdapter extends LlmAdapter {
    * @returns Provider display info.
    */
   override providerInfo(provider: string): LlmProviderInfo {
-    return { id: provider, name: 'External CLI' }
+    const profile = this.config.providers?.[provider]
+    const name = profile?.displayName
+      ?? PRESET_NAMES[provider.toLowerCase()]
+      ?? (provider.toLowerCase() === 'external-cli' ? 'External CLI' : `${provider.charAt(0).toUpperCase() + provider.slice(1)} CLI`)
+    return { id: provider, name }
   }
 
   /**
@@ -45,11 +68,24 @@ export class ExternalCliAdapter extends LlmAdapter {
    * @returns List of model descriptors.
    */
   override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    const profile = this.config.providers?.[provider]
+    if (profile !== undefined) {
+      const modelId = profile.command ?? provider
+      const modelName = profile.displayName ?? `${provider.charAt(0).toUpperCase() + provider.slice(1)} CLI`
+      return Promise.resolve([
+        {
+          provider,
+          id: modelId,
+          name: modelName,
+        },
+      ])
+    }
+
     const known = ['agy', 'codex', 'claude', 'copilot']
     const models: LlmModelInfo[] = known.map(id => ({
       provider,
       id,
-      name: `${id.charAt(0).toUpperCase() + id.slice(1)} CLI`,
+      name: PRESET_NAMES[id] ?? `${id.charAt(0).toUpperCase() + id.slice(1)} CLI`,
     }))
     if (this.config.command !== undefined && !known.includes(this.config.command.toLowerCase())) {
       models.unshift({
