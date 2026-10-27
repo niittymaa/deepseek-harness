@@ -8,6 +8,8 @@
     "docs/cordis-api/inherited.md",
     "docs/i18n/style-samples.md",
     "docs/i18n/terminology.md",
-    "docs/i18n/translation-prompt.md"
+    "docs/i18n/translation-prompt.md",
+    "docs/external-cli.md",
+    "packages/llm/llm-external-cli/README.md"
   ]
 }

@@ -1,0 +1,22 @@
+# Example configuration for using external local LLM CLIs with DeepSeek Harness
+# Mount this patch overlay using:
+#   pnpm dsh headless --patch examples/external-cli/cordis.yml "Your task description"
+
+- id: agent-default-model
+  config:
+    provider: external-cli
+    model: claude
+
+- id: llm-external-cli
+  name: '@deepseek-ai/dsh-llm-external-cli'
+  config:
+    # Set your preferred CLI command:
+    # - agy (Google Antigravity CLI)
+    # - codex (OpenAI Codex CLI)
+    # - claude (Anthropic Claude Code CLI)
+    # - copilot (GitHub Copilot CLI)
+    command: claude
+    args:
+      - '--print'
+    timeoutMs: 120000
+    shell: true
