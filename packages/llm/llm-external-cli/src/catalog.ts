@@ -66,7 +66,7 @@ export async function discoverCliModels(profile: ExternalCliProviderProfile, sig
       else resolve(stdout)
     })
   })
-  const models: ExternalCliModel[] = []
+  const models: { id: string; name: string }[] = []
   const seen = new Set<string>()
   for (const line of output.split(/\r?\n/)) {
     if (line.trim().length === 0 || line.startsWith('Fetching ')) continue
@@ -78,7 +78,59 @@ export async function discoverCliModels(profile: ExternalCliProviderProfile, sig
     seen.add(id)
   }
   if (models.length === 0) throw new LlmError('The CLI returned no models. Check CLI authentication and retry.', 'CLI_EMPTY_CATALOG')
-  return models
+  return groupLevelModels(models)
+}
+
+/** Reasoning levels Agy appends to a model identifier, in `--effort` order. */
+const AGY_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+
+/** The level a model identifier ends with, when it names one. */
+function levelOf(id: string): string | undefined {
+  const lower = id.toLowerCase()
+  return AGY_LEVELS.find(level => lower.endsWith(`-${level}`))
+}
+
+/** The model name without the parenthesized level Agy appends to it. */
+function withoutLevel(name: string): string {
+  const stripped = name.replace(/\s*\((?:low|medium|high|xhigh|max)\)$/i, '').trim()
+  return stripped.length === 0 ? name : stripped
+}
+
+/**
+ * Fold Agy's one-identifier-per-level catalog into one entry per model. Agy
+ * lists `gemini-4-argon-low`, `-medium` and `-high` separately and accepts the
+ * level-free identifier with `--effort`, so a family becomes one model whose
+ * efforts name its levels. A model with a single level keeps its identifier.
+ * @param models - Catalog rows in CLI order.
+ * @returns One entry per model, each at the position of its first identifier.
+ */
+function groupLevelModels(models: readonly { id: string; name: string }[]): ExternalCliModel[] {
+  const levelsByModel = new Map<string, string[]>()
+  for (const model of models) {
+    const level = levelOf(model.id)
+    if (level === undefined) continue
+    const base = model.id.slice(0, -(level.length + 1))
+    levelsByModel.set(base, [...levelsByModel.get(base) ?? [], level])
+  }
+  const families = new Map([...levelsByModel].filter(([, levels]) => levels.length > 1).map(([base, levels]) => [
+    base,
+    Object.fromEntries(AGY_LEVELS.filter(level => levels.includes(level)).map(level => [level, level])),
+  ]))
+  const grouped: ExternalCliModel[] = []
+  const seen = new Set<string>()
+  for (const model of models) {
+    const level = levelOf(model.id)
+    const base = level === undefined ? '' : model.id.slice(0, -(level.length + 1))
+    const family = families.get(base)
+    if (family === undefined) {
+      grouped.push(model)
+      continue
+    }
+    if (seen.has(base)) continue
+    seen.add(base)
+    grouped.push({ id: base, name: withoutLevel(model.name), reasoningEfforts: family })
+  }
+  return grouped
 }
 
 /**

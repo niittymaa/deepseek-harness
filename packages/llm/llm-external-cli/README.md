@@ -50,7 +50,7 @@ providers:
 
 Agy discovers models with `agy models`, Codex answers `model/list` over `codex app-server`, Claude Code discloses its models in the initialization metadata of `--print` stream mode, and Copilot answers `models.list` over its stdio channel. Each channel runs without a generation request and is stopped once the catalog arrives. Discovered models carry the reasoning levels their CLI advertises; the chat selector offers them without saving the model first. A configured entry overrides the name and levels it declares and keeps the discovered ones it leaves unset.
 
-Agy advertises one model identifier per reasoning level (`gemini-4-argon-low`, `gemini-4-argon-high`, …), so its model entries carry no separate level map and the Effort selector stays empty for them. Its CLI default entry carries the levels `--effort` documents and applies them to the model Agy configures itself.
+Agy publishes one model identifier per reasoning level (`gemini-4-argon-low`, `gemini-4-argon-medium`, `gemini-4-argon-high`). Discovery folds those identifiers into one model (`Gemini 4 Argon`) whose levels the Effort selector offers, and the request sends the level-free identifier with `--effort`; a model Agy publishes at a single level keeps its identifier. The CLI default entry carries the levels `--effort` documents and applies them to the model Agy configures itself.
 
 Copilot advertises no text models on some installations. Its route then offers only the CLI default entry and its configured models; the default entry still carries the levels `--reasoning-effort` documents. Discovery uses the profile timeout and `discoveryMaxBytes` output limit (default 1 MiB).
 

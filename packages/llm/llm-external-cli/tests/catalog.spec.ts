@@ -38,6 +38,43 @@ describe('CLI catalog discovery', () => {
     await expect(discoverCliModels({ command: 'agy' })).rejects.toThrow()
   })
 
+  it('folds the identifiers Agy publishes per level into one model with its levels', async () => {
+    output([
+      'gemini-4-argon-medium\tGemini 4 Argon (Medium)',
+      'gemini-4-argon-high\tGemini 4 Argon (High)',
+      'gemini-4-argon-low\tGemini 4 Argon (Low)',
+      'gemini-3.8-flash-high\tGemini 3.8 Flash (High)',
+      'gemini-3.8-flash-low\tGemini 3.8 Flash (Low)',
+      'gpt-oss-120b-medium\tGPT-OSS 120B (Medium)',
+      'plain-model\tPlain model',
+    ].join('\n'))
+    expect(await discoverCliModels({ command: 'agy' })).toEqual([
+      {
+        id: 'gemini-4-argon',
+        name: 'Gemini 4 Argon',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+      },
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', reasoningEfforts: { low: 'low', high: 'high' } },
+      // One published level is not a family: the identifier stays as the CLI lists it.
+      { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' },
+      { id: 'plain-model', name: 'Plain model' },
+    ])
+  })
+
+  it('keeps a model name that publishes no level suffix', async () => {
+    output('model-a-low\tModel A\nmodel-a-high\t\n')
+    expect(await discoverCliModels({ command: 'agy' })).toEqual([
+      { id: 'model-a', name: 'Model A', reasoningEfforts: { low: 'low', high: 'high' } },
+    ])
+  })
+
+  it('keeps a name that carries only the level', async () => {
+    output('model-b-low\t(Low)\nmodel-b-high\t(High)\n')
+    expect(await discoverCliModels({ command: 'agy' })).toEqual([
+      { id: 'model-b', name: '(Low)', reasoningEfforts: { low: 'low', high: 'high' } },
+    ])
+  })
+
   it('starts no command for a provider that publishes no catalog', async () => {
     expect(await discoverCliModels({ command: 'my-cli', cliType: 'custom' })).toEqual([])
     expect(execFile).not.toHaveBeenCalled()
