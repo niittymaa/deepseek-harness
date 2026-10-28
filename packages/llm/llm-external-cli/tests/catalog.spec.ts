@@ -100,6 +100,39 @@ it('uses the Agy executable for an explicit protocol and the identifier for an e
   expect(execFile).toHaveBeenCalledWith('agy', ['models'], expect.any(Object), expect.any(Function))
 })
 
+describe('CLI default levels', () => {
+  it.each([
+    ['copilot', ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']],
+    ['codex', ['low', 'medium', 'high', 'xhigh', 'max']],
+    ['claude', ['low', 'medium', 'high', 'xhigh', 'max']],
+    ['agy', ['low', 'medium', 'high', 'xhigh', 'max']],
+  ] as const)('offers the levels %s applies to its own configured model', async (route, levels) => {
+    output('first\tFirst\n')
+    const adapter = new ExternalCliAdapter({ providers: { [route]: { command: route } } })
+    expect((await adapter.resolveModel(route, route)).reasoning?.efforts.map(level => level.id)).toEqual([...levels])
+  })
+
+  it('offers the levels of the route an alias entry names', async () => {
+    const adapter = new ExternalCliAdapter({ providers: { agy: { command: 'agy', displayName: 'Agy CLI' } } })
+    expect(await adapter.resolveModel('cli', 'agy')).toMatchObject({
+      name: 'Agy CLI',
+      reasoning: { efforts: [{ id: 'low' }, { id: 'medium' }, { id: 'high' }, { id: 'xhigh' }, { id: 'max' }] },
+    })
+  })
+
+  it('offers no levels for a model it cannot describe or a custom CLI', async () => {
+    const adapter = new ExternalCliAdapter({ providers: { mine: { command: 'my-cli' } } })
+    expect((await adapter.resolveModel('mine', 'mine')).reasoning).toBeUndefined()
+    expect((await adapter.resolveModel('missing', 'missing')).reasoning).toBeUndefined()
+  })
+
+  it('names the dialect by route, or by the aliased tool without a configured command', async () => {
+    const adapter = new ExternalCliAdapter({ providers: { agy: { displayName: 'Agy CLI' }, codex: { displayName: 'Codex CLI' } } })
+    expect((await adapter.resolveModel('agy', 'agy')).reasoning?.efforts.map(level => level.id)).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect((await adapter.resolveModel('cli', 'codex')).reasoning?.efforts.map(level => level.id)).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+  })
+})
+
 
 it('executes an automatically discovered model on its configured provider', async () => {
   output('discovered\tDiscovered model\n')

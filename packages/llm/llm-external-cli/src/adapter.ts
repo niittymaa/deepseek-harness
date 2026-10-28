@@ -16,7 +16,7 @@ import {
 } from '@deepseek-ai/dsh-llm'
 import type { ExternalCliModel, ExternalCliOptions, ExternalCliProviderProfile } from './config.ts'
 import { streamExternalCli } from './process.ts'
-import { discoverCliModels, mergeModels } from './catalog.ts'
+import { cliEffortLevels, discoverCliModels, mergeModels } from './catalog.ts'
 
 /** Default context window token limit for external CLI models. */
 export const DEFAULT_CONTEXT_WINDOW = 128000
@@ -178,13 +178,22 @@ export class ExternalCliAdapter extends LlmAdapter {
       ?? PRESET_NAMES[model.toLowerCase()]
       ?? PRESET_NAMES[provider.toLowerCase()]
       ?? model
+    // The CLI default entry runs without a model option, so its levels are the
+    // ones the CLI applies to its own configured model.
+    const runsCliDefault = profile !== undefined
+      && (model === provider || this.config.providers?.[model] !== undefined)
+    const levels = selected?.reasoningEfforts === undefined
+      ? runsCliDefault
+        ? cliEffortLevels({ ...profile, command: profile.command ?? (route === undefined ? model : provider) })
+        : []
+      : Object.keys(selected.reasoningEfforts)
     return Promise.resolve({
       provider,
       id: model,
       name,
       context: { contextWindow: DEFAULT_CONTEXT_WINDOW },
-      ...selected?.reasoningEfforts === undefined ? {} : {
-        reasoning: { efforts: Object.keys(selected.reasoningEfforts).map(id => ({ id: ReasoningEffortId(id), name: id })) },
+      ...levels.length === 0 ? {} : {
+        reasoning: { efforts: levels.map(id => ({ id: ReasoningEffortId(id), name: id })) },
       },
     })
   }

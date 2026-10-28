@@ -540,6 +540,47 @@ it('leaves the CLI model and effort defaults untouched for the default entry', (
   })).toEqual({ command: 'codex', args: ['exec'] })
 })
 
+it.each([
+  ['agy', ['--print', '-'], ['--print', '-', '--effort', 'high']],
+  ['claude', ['--print'], ['--print', '--effort', 'high']],
+  ['codex', ['exec'], ['exec', '-c', 'model_reasoning_effort=high']],
+  ['copilot', [], ['--reasoning-effort', 'high']],
+] as const)('sends the chosen level to the %s default entry', (route, args, expected) => {
+  expect(resolveCommandAndArgs({ providers: { [route]: { command: route, args: [...args] } } }, {
+    provider: route, model: route, reasoningEffort: ReasoningEffortId('high'), messages: [],
+  }).args).toEqual([...expected])
+})
+
+it('sends the chosen level for an alias entry that names a configured route', () => {
+  expect(resolveCommandAndArgs({ providers: { agy: { command: 'agy' } } }, {
+    provider: 'cli', model: 'agy', reasoningEffort: ReasoningEffortId('medium'), messages: [],
+  }).args).toEqual(['--print', '-', '--effort', 'medium'])
+})
+
+it('uses configured effort arguments for the default entry', () => {
+  expect(resolveCommandAndArgs({ providers: { agy: { command: 'agy', effortArgs: ['--reasoning-effort', '{effort}'] } } }, {
+    provider: 'agy', model: 'agy', reasoningEffort: ReasoningEffortId('low'), messages: [],
+  }).args).toEqual(['--print', '-', '--reasoning-effort', 'low'])
+})
+
+it('refuses a level the CLI default does not accept', () => {
+  expect(() => resolveCommandAndArgs({ providers: { copilot: { command: 'copilot' } } }, {
+    provider: 'copilot', model: 'copilot', reasoningEffort: ReasoningEffortId('ultra'), messages: [],
+  })).toThrow('CLI default model does not support')
+})
+
+it('refuses a level for a custom CLI that declares no vocabulary', () => {
+  expect(() => resolveCommandAndArgs({ providers: { route: { command: 'sh', cliType: 'custom' } } }, {
+    provider: 'route', model: 'route', reasoningEffort: ReasoningEffortId('high'), messages: [],
+  })).toThrow('CLI default model does not support')
+})
+
+it('refuses a level when the CLI arguments already override the effort', () => {
+  expect(() => resolveCommandAndArgs({ providers: { agy: { command: 'agy', args: ['--print', '-', '--effort', 'low'] } } }, {
+    provider: 'agy', model: 'agy', reasoningEffort: ReasoningEffortId('high'), messages: [],
+  })).toThrow('Remove model and effort overrides')
+})
+
 it('supports an explicit Off entry without sending an effort option', () => {
   expect(resolveCommandAndArgs({ providers: { codex: { command: 'codex', models: [{ id: 'chosen', reasoningEfforts: { off: null } }] } } }, {
     provider: 'codex', model: 'chosen', reasoningEffort: ReasoningEffortId('off'), messages: [],

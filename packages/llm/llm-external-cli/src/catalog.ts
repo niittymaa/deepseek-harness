@@ -20,6 +20,26 @@ export function cliType(profile: ExternalCliProviderProfile): NonNullable<Extern
   }
 }
 
+/** Reasoning levels each CLI accepts for the model it configures itself, as its own help or catalog states. */
+const CLI_EFFORT_LEVELS: Record<NonNullable<ExternalCliProviderProfile['cliType']>, readonly string[]> = {
+  agy: ['low', 'medium', 'high', 'xhigh', 'max'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
+  codex: ['low', 'medium', 'high', 'xhigh', 'max'],
+  copilot: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+  // A custom executable documents no level vocabulary; declare levels on its configured models instead.
+  custom: [],
+}
+
+/**
+ * Reasoning levels the CLI default entry offers. That entry sends no model, so
+ * these are the levels the CLI applies to its own configured model.
+ * @param profile - Configured executable and optional explicit protocol.
+ * @returns Level identifiers in CLI order, empty when the dialect claims none.
+ */
+export function cliEffortLevels(profile: ExternalCliProviderProfile): readonly string[] {
+  return CLI_EFFORT_LEVELS[cliType(profile)]
+}
+
 /** Fetch a native CLI catalog without issuing a generation request.
  *
  * Agy prints its catalog for `agy models`; Codex, Claude Code, and Copilot

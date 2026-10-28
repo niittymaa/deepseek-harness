@@ -7,8 +7,8 @@
 import { spawn } from 'node:child_process'
 import type { ContentBlock, GenerateOptions, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { LlmError } from '@deepseek-ai/dsh-llm'
-import type { ExternalCliOptions } from './config.ts'
-import { cliType } from './catalog.ts'
+import type { ExternalCliOptions, ExternalCliProviderProfile } from './config.ts'
+import { cliEffortLevels, cliType } from './catalog.ts'
 
 /** Default execution timeout in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 120000
@@ -143,31 +143,68 @@ export function resolveCommandAndArgs(
     }
   }
 
+  // A route runs its CLI default when the chat selects the route itself or an
+  // alias entry that names another configured route.
+  const cliDefault = profile !== undefined
+    && (options.model === options.provider || config.providers?.[options.model] !== undefined)
   const selected = profile?.models?.find(model => model.id === options.model)
-  if (profile !== undefined && options.provider !== 'cli' && options.model !== options.provider && selected === undefined) {
+  if (profile !== undefined && options.provider !== 'cli' && !cliDefault && selected === undefined) {
     throw new LlmError('The selected CLI model is unavailable. Select a model from the chat menu.', 'CLI_MODEL_UNAVAILABLE')
   }
-  if (selected !== undefined) {
+  const effort = options.reasoningEffort
+  if (profile !== undefined && selected !== undefined) {
+    assertNoOverrides(args)
     const kind = cliType({ ...profile, command })
-    if (args.some(arg => /^(--model|-m|--effort|--reasoning-effort)(=|$)/.test(arg)
-      || /^(?:--config=|-c)?(?:model|model_reasoning_effort)=/.test(arg))) {
-      throw new LlmError('Remove model and effort overrides from the CLI arguments before selecting a model', 'CLI_ARGUMENT_CONFLICT')
-    }
-    const modelArgs = profile?.modelArgs ?? (kind === 'custom' ? undefined : ['--model', '{model}'])
+    const modelArgs = profile.modelArgs ?? (kind === 'custom' ? undefined : ['--model', '{model}'])
     if (modelArgs === undefined) throw new LlmError('Configure modelArgs for this custom CLI', 'CLI_MODEL_ARGS_REQUIRED')
     args.push(...modelArgs.map(arg => arg.replaceAll('{model}', selected.id)))
-    if (options.reasoningEffort !== undefined) {
-      const effort = selected.reasoningEfforts?.[options.reasoningEffort]
-      if (effort === undefined) throw new LlmError('The selected model does not support this effort', 'CLI_UNSUPPORTED_EFFORT')
-      const effortArgs = profile?.effortArgs ?? (kind === 'codex'
-        ? ['-c', 'model_reasoning_effort={effort}']
-        : kind === 'copilot' ? ['--reasoning-effort', '{effort}']
-          : kind === 'custom' ? undefined : ['--effort', '{effort}'])
-      if (effortArgs === undefined) throw new LlmError('Configure effortArgs for this custom CLI', 'CLI_EFFORT_ARGS_REQUIRED')
-      if (effort !== null) args.push(...effortArgs.map(arg => arg.replaceAll('{effort}', effort)))
+    if (effort !== undefined) {
+      const value = selected.reasoningEfforts?.[effort]
+      if (value === undefined) throw new LlmError('The selected model does not support this effort', 'CLI_UNSUPPORTED_EFFORT')
+      // A configured null level selects the model without an effort option.
+      if (value !== null) args.push(...effortArgs(kind, profile, value))
     }
+  } else if (profile !== undefined && cliDefault && effort !== undefined) {
+    // The CLI default carries no model option: the level applies to the model
+    // the CLI configures for itself.
+    assertNoOverrides(args)
+    if (!cliEffortLevels({ ...profile, command }).includes(effort)) {
+      throw new LlmError('The CLI default model does not support this effort', 'CLI_UNSUPPORTED_EFFORT')
+    }
+    args.push(...effortArgs(cliType({ ...profile, command }), profile, effort))
   }
   return { command, args }
+}
+
+/**
+ * Refuse base arguments that already fix a model or effort the selection overrides.
+ * @param args - Configured base arguments.
+ */
+function assertNoOverrides(args: readonly string[]): void {
+  if (args.some(arg => /^(--model|-m|--effort|--reasoning-effort)(=|$)/.test(arg)
+    || /^(?:--config=|-c)?(?:model|model_reasoning_effort)=/.test(arg))) {
+    throw new LlmError('Remove model and effort overrides from the CLI arguments before selecting a model', 'CLI_ARGUMENT_CONFLICT')
+  }
+}
+
+/**
+ * The effort option of one CLI dialect with its level substituted.
+ * @param kind - CLI dialect resolved for the route.
+ * @param profile - Route profile, whose effort arguments replace the dialect's.
+ * @param value - Level value the CLI receives.
+ * @returns Arguments to append.
+ */
+function effortArgs(
+  kind: NonNullable<ExternalCliProviderProfile['cliType']>,
+  profile: ExternalCliProviderProfile,
+  value: string,
+): string[] {
+  const template = profile.effortArgs ?? (kind === 'codex'
+    ? ['-c', 'model_reasoning_effort={effort}']
+    : kind === 'copilot' ? ['--reasoning-effort', '{effort}']
+      : kind === 'custom' ? undefined : ['--effort', '{effort}'])
+  if (template === undefined) throw new LlmError('Configure effortArgs for this custom CLI', 'CLI_EFFORT_ARGS_REQUIRED')
+  return template.map(arg => arg.replaceAll('{effort}', value))
 }
 
 /**

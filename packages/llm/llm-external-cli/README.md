@@ -30,7 +30,7 @@ Choose this provider when working offline, utilizing subscription-authenticated 
 
 ### Select a model in chat
 
-Configured CLI routes offer their actual models in the model selector below the chat input. Select a model and one of its declared reasoning efforts before sending a message. A running request retains its original selection. The CLI default entry preserves the CLI's own model and reasoning settings and follows the route's models in the list, because only a model carries reasoning levels. Each route appears under its own name; the `cli` provider only aliases routes, so its tool list is not offered while a route has its own group.
+Configured CLI routes offer their actual models in the model selector below the chat input. Select a model and one of its declared reasoning efforts before sending a message. A running request retains its original selection. The CLI default entry keeps the CLI's own model and sends only the effort the CLI documents for it, so every route offers a level even when it advertises no models (Copilot on some installations). The default entry follows the route's models in the list.
 
 Each `providers` profile accepts `cliType`, `models`, and optional custom argument arrays. A model has an `id`, optional `name`, and optional `reasoningEfforts` mapping from selectable effort identifiers to CLI values. Codex uses `--model` and `-c model_reasoning_effort=…`; Claude Code and Agy use `--model` and `--effort`; Copilot uses `--model` and `--reasoning-effort`. Remove conflicting model or effort options from the profile's base `args` before selecting an explicit model.
 
@@ -50,9 +50,9 @@ providers:
 
 Agy discovers models with `agy models`, Codex answers `model/list` over `codex app-server`, Claude Code discloses its models in the initialization metadata of `--print` stream mode, and Copilot answers `models.list` over its stdio channel. Each channel runs without a generation request and is stopped once the catalog arrives. Discovered models carry the reasoning levels their CLI advertises; the chat selector offers them without saving the model first. A configured entry overrides the name and levels it declares and keeps the discovered ones it leaves unset.
 
-Agy advertises one model identifier per reasoning level (`gemini-4-argon-low`, `gemini-4-argon-high`, …), so its entries carry no separate level map and the Effort selector stays empty for an Agy model. The CLI default entry never carries levels: it defers the model and the effort to the CLI's own configuration.
+Agy advertises one model identifier per reasoning level (`gemini-4-argon-low`, `gemini-4-argon-high`, …), so its model entries carry no separate level map and the Effort selector stays empty for them. Its CLI default entry carries the levels `--effort` documents and applies them to the model Agy configures itself.
 
-Copilot advertises no text models on some installations. Its route then offers only the CLI default entry and its configured models. Discovery uses the profile timeout and `discoveryMaxBytes` output limit (default 1 MiB).
+Copilot advertises no text models on some installations. Its route then offers only the CLI default entry and its configured models; the default entry still carries the levels `--reasoning-effort` documents. Discovery uses the profile timeout and `discoveryMaxBytes` output limit (default 1 MiB).
 
 Custom CLIs declare `modelArgs` and `effortArgs` arrays. Each `{model}` or `{effort}` occurrence is replaced within its argument without splitting values. For example, `modelArgs: ['--model', '{model}']`. Executable paths may select an explicit `cliType` independently of their filename.
 
