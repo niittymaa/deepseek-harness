@@ -158,6 +158,7 @@ export class ModelDirectory {
   private syncInputs(): void {
     if (this.disposed) return
     const catalog = this.catalog.store.getSnapshot()
+    const groups = selectableGroups(catalog.value?.groups ?? [], this.store.getSnapshot().current?.provider)
     const projected = modelSelectionProjection(this.projected.getSnapshot())
     const intended = projected?.next ?? catalog.value?.default
     const reasoning = intended === undefined ? undefined : this.catalog.reasoningFor(intended)
@@ -169,7 +170,7 @@ export class ModelDirectory {
         current: catalog.value === null ? null : this.store.getSnapshot().current,
         ...retainedEffort === undefined ? {} : { retainedEffort },
         routable: null,
-        groups: catalog.value?.groups ?? [],
+        groups,
         failures: catalog.value?.failures ?? [],
         status: catalog.status === 'error' ? 'error' : 'loading',
         pending: this.store.getSnapshot().pending,
@@ -184,7 +185,7 @@ export class ModelDirectory {
       current: selection,
       ...retainedEffort === undefined ? {} : { retainedEffort },
       routable,
-      groups: catalog.value.groups,
+      groups,
       failures: catalog.value.failures,
       status: this.store.getSnapshot().status === 'selecting'
         ? 'selecting'
@@ -197,4 +198,23 @@ export class ModelDirectory {
 
 function modelSelectionProjection(value: unknown): ModelSelectionProjection | undefined {
   return value === undefined ? undefined : value as ModelSelectionProjection
+}
+
+/**
+ * Provider groups the picker offers. A group whose every entry names another
+ * provider aliases those providers instead of listing models, so selecting one
+ * of its entries chooses a model the alias cannot describe: its own route lists
+ * the same provider with the models and reasoning levels the route advertises.
+ * The provider holding the saved selection stays listed, so a selection made
+ * before an alias was redundant still shows where it lives.
+ * @param groups - Provider groups in catalog order.
+ * @param currentProvider - Provider of the saved selection, when one exists.
+ * @returns The groups that address models.
+ */
+export function selectableGroups(
+  groups: readonly ModelProviderGroup[],
+  currentProvider?: string,
+): readonly ModelProviderGroup[] {
+  return groups.filter(group => group.id === currentProvider || !group.models.every(model =>
+    groups.some(other => other.id !== group.id && other.id === model.id)))
 }

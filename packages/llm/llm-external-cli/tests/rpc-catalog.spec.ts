@@ -273,7 +273,7 @@ describe('catalog channel failures', () => {
       ] } })
     })
     const adapter = new ExternalCliAdapter({ providers: { codex: { command: 'codex' } } })
-    expect((await adapter.listModels('codex')).map(model => model.id)).toEqual(['codex', 'gpt-6'])
+    expect((await adapter.listModels('codex')).map(model => model.id)).toEqual(['gpt-6', 'codex'])
     expect(await adapter.resolveModel('codex', 'gpt-6')).toMatchObject({
       name: 'GPT-6',
       reasoning: { efforts: [{ id: 'low', name: 'low' }] },

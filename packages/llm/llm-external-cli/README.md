@@ -30,7 +30,7 @@ Choose this provider when working offline, utilizing subscription-authenticated 
 
 ### Select a model in chat
 
-Configured CLI routes offer their actual models in the model selector below the chat input. Select a model and one of its declared reasoning efforts before sending a message. A running request retains its original selection. The CLI default entry preserves the CLI's own model and reasoning settings.
+Configured CLI routes offer their actual models in the model selector below the chat input. Select a model and one of its declared reasoning efforts before sending a message. A running request retains its original selection. The CLI default entry preserves the CLI's own model and reasoning settings and follows the route's models in the list, because only a model carries reasoning levels. Each route appears under its own name; the `cli` provider only aliases routes, so its tool list is not offered while a route has its own group.
 
 Each `providers` profile accepts `cliType`, `models`, and optional custom argument arrays. A model has an `id`, optional `name`, and optional `reasoningEfforts` mapping from selectable effort identifiers to CLI values. Codex uses `--model` and `-c model_reasoning_effort=…`; Claude Code and Agy use `--model` and `--effort`; Copilot uses `--model` and `--reasoning-effort`. Remove conflicting model or effort options from the profile's base `args` before selecting an explicit model.
 

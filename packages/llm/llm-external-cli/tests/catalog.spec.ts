@@ -76,8 +76,8 @@ it('merges discovered models with manual names and reasoning settings', async ()
     { id: 'first', name: 'Manual name', reasoningEfforts: { high: 'high' } },
   ] } } })
   expect(await adapter.listModels('agy')).toEqual([
-    { provider: 'agy', id: 'agy', name: 'agy (CLI default)' },
     { provider: 'agy', id: 'first', name: 'Manual name' }, { provider: 'agy', id: 'second', name: 'Second' },
+    { provider: 'agy', id: 'agy', name: 'agy (CLI default)' },
   ])
   expect(await adapter.resolveModel('agy', 'first')).toMatchObject({ reasoning: { efforts: [{ id: 'high', name: 'high' }] } })
 })

@@ -113,9 +113,11 @@ export class ExternalCliAdapter extends LlmAdapter {
         discovered = []
       }
       const merged = mergeModels(discovered, profile.models ?? [])
+      // Models first: the CLI default entry defers model and effort to the CLI,
+      // so it carries no reasoning levels and belongs after the choices that do.
       return Promise.resolve([
-        { provider, id: provider, name: `${profile.displayName ?? provider} (CLI default)` },
         ...merged.map(model => ({ provider, id: model.id, name: model.name ?? model.id })),
+        { provider, id: provider, name: `${profile.displayName ?? provider} (CLI default)` },
       ])
     }
     if (provider.toLowerCase() === 'cli' || provider.toLowerCase() === 'external-cli') {
