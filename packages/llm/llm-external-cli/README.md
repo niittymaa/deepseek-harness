@@ -39,7 +39,7 @@ Configure the `agy` CLI as your backend provider:
   name: '@deepseek-ai/dsh-llm-external-cli'
   config:
     command: agy
-    args: []
+    args: ['--print', '-']
 ```
 
 Run via the CLI dispatcher:
@@ -107,7 +107,7 @@ pnpm dsh headless --provider external-cli --model copilot "Generate a docker com
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`ExternalCliAdapter` implements `LlmAdapter` from `@deepseek-ai/dsh-llm`. For each turn, it formats prompt messages into text, spawns the specified command, writes to child stdin, and reads stdout. Standard output containing `<think>...</think>` tags is parsed to separate reasoning deltas from visible text deltas. All API key validation is completely bypassed for this provider.
+`ExternalCliAdapter` implements `LlmAdapter` from `@deepseek-ai/dsh-llm`. For each turn, it formats prompt messages into text, spawns the specified command, writes to child stdin, and reads stdout. A successful exit without response content produces `CLI_EMPTY_OUTPUT`, including the standard-error diagnostic when available. CLI subscription limits and noninteractive permission denials remain provider failures; Harness does not grant permissions or reset quotas. Standard output containing `<think>...</think>` tags is parsed to separate reasoning deltas from visible text deltas. All API key validation is completely bypassed for this provider.
 
 -----
 
@@ -119,6 +119,10 @@ pnpm dsh headless --provider external-cli --model copilot "Generate a docker com
 - [llm-pi-ai adapter](../llm-pi-ai/README.md) - multi-provider API adapter.
 
 -----
+
+## Dev Note
+
+The adapter buffers CLI output until process exit. Token counts are estimates; external CLI authentication, quotas, and tool permissions are managed by the CLI.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -137,9 +141,6 @@ Token usage is estimated from prompt character counts and CLI output character l
 
 Prompt prefix reuse and caching behavior depend entirely on the external local CLI's internal caching implementation.
 
------
-
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
 - Interactive multi-step tool calls require native CLI support in the targeted external tool.

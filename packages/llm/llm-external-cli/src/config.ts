@@ -48,11 +48,17 @@ export interface ExternalCliOptions {
 
 /** Plugin configuration schema for cordis loader. */
 export interface Config {
+  /** Executable name or path. */
   command?: string
+  /** Arguments replacing the executable defaults. */
   args?: string[]
+  /** Maximum execution duration in milliseconds. */
   timeoutMs?: number
+  /** Whether the executable runs through a shell. */
   shell?: boolean
+  /** Primary provider route identifier. */
   provider?: string
+  /** Live provider profiles keyed by route identifier. */
   providers: Volatile<Record<string, ExternalCliProviderProfile>>
 }
 

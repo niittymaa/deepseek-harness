@@ -128,6 +128,31 @@ describe('ExternalCliAdapter', () => {
     expect(assembler.blocks()).toEqual([{ type: 'text', text: 'Hello from external CLI' }])
   })
 
+  it.each([
+    'Permission denied in headless mode',
+    'Individual quota reached. Resets in 70h14m29s.',
+    '',
+  ])('reports empty successful output with diagnostic %j', async (diagnostic) => {
+    const adapter = new ExternalCliAdapter({
+      command: process.execPath,
+      args: ['-e', `process.stderr.write(${JSON.stringify(diagnostic)})`],
+    })
+    const chunks = []
+    for await (const chunk of adapter.stream({ provider: 'external-cli', model: 'test', messages: [] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks).toEqual([{
+      type: 'finish',
+      reason: {
+        kind: 'error',
+        failure: {
+          code: 'CLI_EMPTY_OUTPUT',
+          message: `CLI command "${process.execPath}" returned no response.${diagnostic ? ` ${diagnostic}` : ' Check the CLI authentication and noninteractive permissions.'}`,
+        },
+      },
+    }])
+  })
+
   it('separates reasoning when CLI outputs think tags', async () => {
     const adapter = new ExternalCliAdapter({
       command: process.execPath,
@@ -188,6 +213,27 @@ describe('ExternalCliAdapter', () => {
     expect(assembler.blocks()).toEqual([{ type: 'text', text: 'ECHO: Piped through stdin' }])
   })
 
+  it('preserves a failed CLI diagnostic written to stdout', async () => {
+    const adapter = new ExternalCliAdapter({
+      command: process.execPath,
+      args: ['-e', 'process.stdout.write("Individual quota reached. Resets in 70h14m29s."); process.exitCode = 1'],
+    })
+    const chunks = []
+    for await (const chunk of adapter.stream({ provider: 'external-cli', model: 'test', messages: [] })) {
+      chunks.push(chunk)
+    }
+    expect(chunks).toEqual([{
+      type: 'finish',
+      reason: {
+        kind: 'error',
+        failure: {
+          code: 'CLI_EXECUTION_ERROR',
+          message: `CLI command "${process.execPath}" failed (code 1): Individual quota reached. Resets in 70h14m29s.`,
+        },
+      },
+    }])
+  })
+
   it('handles child process failure with error finish chunk', async () => {
     const adapter = new ExternalCliAdapter({
       command: process.execPath,
@@ -220,7 +266,7 @@ describe('ExternalCliAdapter', () => {
       args: ['-e', 'setTimeout(() => process.stdout.write("Done"), 5000)'],
     })
 
-    setTimeout(() => controller.abort(), 100)
+    setTimeout(() => { controller.abort() }, 100)
 
     const chunks = []
     for await (const chunk of adapter.stream({
@@ -281,7 +327,7 @@ describe('Cordis plugin registration', () => {
         providers: {
           get: () => currentProviders,
         },
-      } as unknown as LlmExternalCli.Config,
+      },
     )
 
     expect(ctx.llm.listProviders()).toEqual([])

@@ -1524,6 +1524,10 @@ export interface Config {
   permissionMode?: string
   /** Approval behavior applied after preset selection; an explicit CLI flag takes precedence. Omission keeps current policy. */
   approvalPolicy?: ApprovalPolicy
+  /** Model provider (e.g. external-cli, deepseek-official); absent uses default model selection. */
+  provider?: string
+  /** Model identifier or external CLI tool name; absent uses default model selection. */
+  model?: string
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-headless -->
@@ -1837,6 +1841,67 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-api-key -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-external-cli -->
+<a id="deepseek-aidsh-llm-external-cli"></a>
+
+## `@deepseek-ai/dsh-llm-external-cli`
+
+- `inject`: `llm`
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/llm/llm-external-cli/src/index.ts:20`](../packages/llm/llm-external-cli/src/index.ts)
+
+```ts config-catalog
+/** Configuration accepted from the Loader or direct plugin mounting. */
+type PluginConfig = Config | ExternalCliOptions
+
+/** Plugin configuration schema for cordis loader. */
+export interface Config {
+  /** Executable name or path. */
+  command?: string
+  /** Arguments replacing the executable defaults. */
+  args?: string[]
+  /** Maximum execution duration in milliseconds. */
+  timeoutMs?: number
+  /** Whether the executable runs through a shell. */
+  shell?: boolean
+  /** Primary provider route identifier. */
+  provider?: string
+  /** Live provider profiles keyed by route identifier. */
+  providers: Volatile<Record<string, ExternalCliProviderProfile>>
+}
+
+/** Configuration options for the external CLI provider plugin. */
+export interface ExternalCliOptions {
+  /** The executable name (e.g. agy, codex, claude, copilot). */
+  command?: string
+  /** Optional array of additional CLI arguments. */
+  args?: string[]
+  /** Command execution timeout in milliseconds. */
+  timeoutMs?: number
+  /** Whether to spawn the command within a shell environment. */
+  shell?: boolean
+  /** Provider route key (default: 'external-cli'). */
+  provider?: string
+  /** Configured provider profiles keyed by route. */
+  providers?: Record<string, ExternalCliProviderProfile>
+}
+
+/** Configuration profile for one external CLI provider route. */
+export interface ExternalCliProviderProfile {
+  /** The executable name (e.g. agy, codex, claude, copilot). */
+  command?: string
+  /** Optional array of additional CLI arguments. */
+  args?: string[]
+  /** Command execution timeout in milliseconds. */
+  timeoutMs?: number
+  /** Whether to spawn the command within a shell environment. */
+  shell?: boolean
+  /** Human-facing display name. */
+  displayName?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-external-cli -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-pi-ai -->
 <a id="deepseek-aidsh-llm-pi-ai"></a>

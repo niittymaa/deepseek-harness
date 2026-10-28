@@ -124,6 +124,9 @@ Options:
                               permission preset (choices: "ask", "never")
   --add-dir <path>            allow an additional physical absolute directory
                               under workspace-write (repeatable)
+  --provider <provider>       select the model provider (e.g. external-cli,
+                              deepseek-official)
+  --model <model>             select the model or external CLI tool name
   -h, --help                  show this help
 
 Examples:
@@ -133,6 +136,8 @@ Examples:
   dsh --profile headless --session-id session-… "continue"   resume an existing Session
   dsh --profile headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
                                                         grant shared Git metadata for this task
+  dsh --profile headless --provider external-cli --model claude "refactor this"
+                                                        use an external local CLI provider
 
 ```
 

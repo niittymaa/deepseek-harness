@@ -1419,6 +1419,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Explicit absolute write grants for this invocation; absent adds no directories.',
         parameters: [],
       },
+      {
+        signature: 'provider?: string',
+        description: 'Model provider (e.g. external-cli, deepseek-official); absent preserves default model.',
+        parameters: [],
+      },
+      {
+        signature: 'model?: string',
+        description: 'Model identifier or external CLI tool name; absent preserves default model.',
+        parameters: [],
+      },
     ],
   },
   {

@@ -16,6 +16,9 @@ export { ExternalCliAdapter, DEFAULT_CONTEXT_WINDOW } from './adapter.ts'
 export { Config, type ExternalCliOptions, type ExternalCliProviderProfile } from './config.ts'
 export { formatPrompt, parseThinkTags, resolveCommandAndArgs, streamExternalCli } from './process.ts'
 
+/** Configuration accepted from the Loader or direct plugin mounting. */
+type PluginConfig = Config | ExternalCliOptions
+
 /** Cordis plugin name. */
 export const name = 'llm-external-cli'
 
@@ -28,11 +31,11 @@ export const inject = ['llm']
  * @param ctx - Cordis context with LLM service.
  * @param config - Provider configuration options.
  */
-export function apply(ctx: Context, config: Config | ExternalCliOptions = {}): void {
+export function apply(ctx: Context, config: PluginConfig = {}): void {
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
 
   const getEffectiveConfig = (): ExternalCliOptions => {
-    const rawProviders = 'providers' in config && config.providers !== undefined
+    const rawProviders = config.providers !== undefined
       ? typeof (config.providers as { get?: () => unknown }).get === 'function'
         ? (config.providers as { get: () => unknown }).get()
         : config.providers

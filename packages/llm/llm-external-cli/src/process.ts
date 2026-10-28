@@ -31,10 +31,10 @@ export function formatContentBlocks(content: readonly ContentBlock[]): string {
         parts.push(`[Tool Call: ${block.name}(${block.arguments})]`)
         break
       case 'image':
-        parts.push(`[Image: ${block.attachment.name ?? String(block.attachment.attachmentId)}]`)
+        parts.push(`[Image: ${block.attachment.name}]`)
         break
       case 'file':
-        parts.push(`[File: ${block.attachment.name ?? 'attachment'}]`)
+        parts.push(`[File: ${block.attachment.name}]`)
         break
       default:
         break
@@ -59,7 +59,7 @@ export function formatPrompt(options: GenerateOptions): string {
     const singleMsg = options.messages[0]
     const onlyText = singleMsg.content.every(block => block.type === 'text')
     if (onlyText) {
-      return singleMsg.content.map(block => (block.type === 'text' ? block.text : '')).join('\n')
+      return singleMsg.content.map(block => block.text).join('\n')
     }
   }
 
@@ -148,6 +148,7 @@ export function resolveCommandAndArgs(
 /**
  * Stream responses from an external local CLI command.
  * Sends the formatted prompt via stdin and parses stdout as normalized stream chunks.
+ * Empty successful output yields CLI_EMPTY_OUTPUT with the standard-error diagnostic.
  * @param config - Provider configuration options.
  * @param options - Full generate options.
  * @returns Async iterable yielding canonical StreamChunks.
@@ -264,7 +265,7 @@ export async function* streamExternalCli(
     const stderrText = Buffer.concat(stderrChunks).toString('utf8')
 
     if (exitResult.code !== 0 && exitResult.code !== null) {
-      const errDetails = stderrText.trim() || `Process exited with code ${exitResult.code}`
+      const errDetails = stderrText.trim() || stdoutText.trim() || `Process exited with code ${exitResult.code}`
       yield {
         type: 'finish',
         reason: {
@@ -279,6 +280,19 @@ export async function* streamExternalCli(
     }
 
     const { reasoning, content } = parseThinkTags(stdoutText)
+    if (content.length === 0 && (reasoning === undefined || reasoning.length === 0)) {
+      yield {
+        type: 'finish',
+        reason: {
+          kind: 'error',
+          failure: {
+            code: 'CLI_EMPTY_OUTPUT',
+            message: `CLI command "${command}" returned no response.${stderrText.trim().length > 0 ? ` ${stderrText.trim()}` : ' Check the CLI authentication and noninteractive permissions.'}`,
+          },
+        },
+      }
+      return
+    }
     let blockIndex = 0
 
     if (reasoning !== undefined && reasoning.length > 0) {
