@@ -561,3 +561,10 @@ it('withdraws CLI routes, settings entries and discovery when the plugin unloads
   await expect(llm.discoverModels('llm-external-cli', { provider: 'codex' })).rejects.toThrow('no model discovery')
 
 })
+
+
+it('uses the explicit CLI protocol for default arguments when the executable is a wrapper', () => {
+  expect(resolveCommandAndArgs({ providers: { custom: {
+    command: 'my-wrapper', cliType: 'codex', models: [{ id: 'chosen' }],
+  } } }, { provider: 'custom', model: 'chosen', messages: [] }).args).toEqual(['exec', '--model', 'chosen'])
+})

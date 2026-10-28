@@ -131,7 +131,7 @@ export function resolveCommandAndArgs(
   }
 
   if (args === undefined) {
-    const cmdBase = command.toLowerCase()
+    const cmdBase = profile?.cliType ?? command.toLowerCase()
     if (cmdBase.includes('agy')) {
       args = ['--print', '-']
     } else if (cmdBase.includes('claude')) {
