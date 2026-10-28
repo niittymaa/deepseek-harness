@@ -99,6 +99,16 @@ describe('ExternalCliAdapter', () => {
     expect(resolved.context?.contextWindow).toBe(DEFAULT_CONTEXT_WINDOW)
   })
 
+  it('offers a configured executable that is not a known CLI preset', async () => {
+    const adapter = new ExternalCliAdapter({ command: 'my-cli' })
+    expect((await adapter.listModels('external-cli')).map(model => model.id)).toEqual(['my-cli', 'agy', 'codex', 'claude', 'copilot'])
+  })
+
+  it('reports no models for a route it does not serve', async () => {
+    const adapter = new ExternalCliAdapter({ providers: { codex: { command: 'codex-wrapper' } } })
+    expect(await adapter.listModels('unknown-route')).toEqual([])
+  })
+
   it('streams responses from a spawned child process', async () => {
     const adapter = new ExternalCliAdapter({
       command: process.execPath,
@@ -470,7 +480,7 @@ describe('CLI model selection', () => {
 
   it('offers actual models under their configured provider', async () => {
     const adapter = new ExternalCliAdapter({ providers: { codex: {
-      command: 'codex', models: [{ id: 'chosen', name: 'Chosen model', reasoningEfforts: { high: 'high' } }],
+      command: 'codex-wrapper', models: [{ id: 'chosen', name: 'Chosen model', reasoningEfforts: { high: 'high' } }],
     } } })
     expect(await adapter.listModels('codex')).toContainEqual({ provider: 'codex', id: 'chosen', name: 'Chosen model' })
     expect(await adapter.resolveModel('codex', 'chosen')).toMatchObject({
@@ -551,7 +561,7 @@ it.each([{ '': 'high' }, { high: '' }])('refuses empty reasoning declarations be
 it('withdraws CLI routes, settings entries and discovery when the plugin unloads', async () => {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
-  const fork = ctx.plugin(LlmExternalCli, { providers: { codex: { command: 'codex', models: [{ id: 'chosen' }] } } })
+  const fork = ctx.plugin(LlmExternalCli, { providers: { codex: { command: 'codex-wrapper', models: [{ id: 'chosen' }] } } })
   await fork
   const llm = ctx.llm
   expect(await llm.discoverModels('llm-external-cli', { provider: 'codex' })).toEqual([{ id: 'chosen' }])

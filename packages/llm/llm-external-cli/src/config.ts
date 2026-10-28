@@ -7,6 +7,12 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 
+/** Bound on one catalog interrogation when a profile sets no `timeoutMs`. */
+export const DEFAULT_DISCOVERY_TIMEOUT_MS = 120000
+
+/** Bound on the catalog bytes a CLI may emit when a profile sets no `discoveryMaxBytes`. */
+export const DEFAULT_DISCOVERY_BYTES = 1048576
+
 /** One selectable external CLI model. */
 export interface ExternalCliModel {
   /** Identifier passed to the CLI model option. */

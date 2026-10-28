@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-28-external-cli-catalog-discovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-28-external-cli-catalog-discovery.md
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog:
+  en: f27fec05dd4bff7b
+  zh: 8596b755b0a371f1
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog/problem:
+  en: e2ae8a09dcc23a72
+  zh: de778fc1cebd0e36
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog/decision:
+  en: 0112a8612db87baa
+  zh: 10f1f39f7c4c0f81
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog/alternatives-considered:
+  en: 1b3b7971b1136879
+  zh: 03a135e130f66d83
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog/consequences:
+  en: 2c03391019d7f0ac
+  zh: 77ab3a26c5247a70
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog/testing:
+  en: 448cc44d940d99da
+  zh: cb3aeabd9bd8e9b8
+/agent-note-external-cli-routes-discover-each-cli-s-native-model-catalog/related:
+  en: 05187136e9918402
+  zh: b998499a5492b1e2

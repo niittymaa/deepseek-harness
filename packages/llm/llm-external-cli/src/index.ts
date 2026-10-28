@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import { ExternalCliAdapter } from './adapter.ts'
-import { discoverCliModels } from './catalog.ts'
+import { discoverCliModels, mergeModels } from './catalog.ts'
 import type { Config, ExternalCliOptions, ExternalCliProviderProfile } from './config.ts'
 
 export { ExternalCliAdapter, DEFAULT_CONTEXT_WINDOW } from './adapter.ts'
@@ -118,9 +118,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     const profile = getEffectiveConfig().providers?.[request.provider ?? '']
     if (profile === undefined) return []
     const discovered = await discoverCliModels(profile, signal)
-    const models = new Map(discovered.map(model => [model.id, model]))
-    for (const model of profile.models ?? []) models.set(model.id, model)
-    return [...models.values()]
+    return mergeModels(discovered, profile.models ?? [])
   })
 
   ctx.on('loader/volatile-update', () => {

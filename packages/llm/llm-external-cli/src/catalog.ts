@@ -3,6 +3,8 @@
  */
 import { execFile } from 'node:child_process'
 import { LlmError } from '@deepseek-ai/dsh-llm'
+import { discoverRpcModels } from './rpc-catalog.ts'
+import { DEFAULT_DISCOVERY_BYTES, DEFAULT_DISCOVERY_TIMEOUT_MS } from './config.ts'
 import type { ExternalCliModel, ExternalCliProviderProfile } from './config.ts'
 
 /** Resolve the CLI protocol independently of an executable's directory.
@@ -18,17 +20,25 @@ export function cliType(profile: ExternalCliProviderProfile): NonNullable<Extern
   }
 }
 
-/** Fetch an Agy catalog without issuing a generation request.
+/** Fetch a native CLI catalog without issuing a generation request.
+ *
+ * Agy prints its catalog for `agy models`; Codex, Claude Code, and Copilot
+ * answer over their own metadata channels, so the executable is started in
+ * catalog mode and stopped before it serves a turn. An empty native catalog is
+ * a valid answer: Copilot advertises no text models on some installations, and
+ * the CLI default entry still serves requests.
  * @param profile - Executable and discovery limits.
  * @param signal - Optional cancellation.
- * @returns Validated model identifiers and names.
+ * @returns Validated model identifiers, names, and advertised reasoning levels.
  */
 export async function discoverCliModels(profile: ExternalCliProviderProfile, signal?: AbortSignal): Promise<ExternalCliModel[]> {
-  if (cliType(profile) !== 'agy') return []
+  const type = cliType(profile)
+  if (type === 'custom') return []
+  if (type !== 'agy') return discoverRpcModels(profile, type, signal)
   const output = await new Promise<string>((resolve, reject) => {
     execFile(profile.command ?? 'agy', ['models'], {
-      timeout: profile.timeoutMs ?? 120000,
-      maxBuffer: profile.discoveryMaxBytes ?? 1048576,
+      timeout: profile.timeoutMs ?? DEFAULT_DISCOVERY_TIMEOUT_MS,
+      maxBuffer: profile.discoveryMaxBytes ?? DEFAULT_DISCOVERY_BYTES,
       shell: profile.shell ?? false,
       ...signal === undefined ? {} : { signal },
     }, (error, stdout) => {
@@ -49,4 +59,28 @@ export async function discoverCliModels(profile: ExternalCliProviderProfile, sig
   }
   if (models.length === 0) throw new LlmError('The CLI returned no models. Check CLI authentication and retry.', 'CLI_EMPTY_CATALOG')
   return models
+}
+
+/**
+ * Combine a discovered catalog with the models a profile configures. A
+ * configured entry wins for the name and reasoning levels it declares and
+ * keeps the discovered ones it leaves unset, so adopting a discovered model in
+ * settings does not discard the levels its CLI advertises.
+ * @param discovered - Catalog last discovered for the route, in CLI order.
+ * @param configured - Models the profile declares.
+ * @returns One entry per model identifier, discovered models first.
+ */
+export function mergeModels(discovered: readonly ExternalCliModel[], configured: readonly ExternalCliModel[]): ExternalCliModel[] {
+  const merged = new Map(discovered.map(model => [model.id, model]))
+  for (const model of configured) {
+    const found = merged.get(model.id)
+    const name = model.name ?? found?.name
+    const reasoningEfforts = model.reasoningEfforts ?? found?.reasoningEfforts
+    merged.set(model.id, {
+      id: model.id,
+      ...name === undefined ? {} : { name },
+      ...reasoningEfforts === undefined ? {} : { reasoningEfforts },
+    })
+  }
+  return [...merged.values()]
 }

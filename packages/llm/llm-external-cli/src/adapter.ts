@@ -14,9 +14,9 @@ import {
   type LlmResolvedModelInfo,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { ExternalCliModel, ExternalCliOptions } from './config.ts'
+import type { ExternalCliModel, ExternalCliOptions, ExternalCliProviderProfile } from './config.ts'
 import { streamExternalCli } from './process.ts'
-import { discoverCliModels } from './catalog.ts'
+import { discoverCliModels, mergeModels } from './catalog.ts'
 
 /** Default context window token limit for external CLI models. */
 export const DEFAULT_CONTEXT_WINDOW = 128000
@@ -52,6 +52,8 @@ function validateCatalogs(config: ExternalCliOptions): void {
  */
 export class ExternalCliAdapter extends LlmAdapter {
   private config: ExternalCliOptions
+  /** Catalog the last discovery read for each route, refreshed by the model menu. */
+  private readonly catalogs = new Map<string, readonly ExternalCliModel[]>()
 
   /**
    * Create a new ExternalCliAdapter instance.
@@ -70,6 +72,8 @@ export class ExternalCliAdapter extends LlmAdapter {
   updateConfig(config: ExternalCliOptions): void {
     validateCatalogs(config)
     this.config = config
+    // A profile may now name another executable, so catalogs read from the replaced one no longer describe it.
+    this.catalogs.clear()
   }
 
   /**
@@ -100,19 +104,18 @@ export class ExternalCliAdapter extends LlmAdapter {
   override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
     const profile = this.config.providers?.[provider]
     if (profile !== undefined) {
-      let discovered: ExternalCliModel[]
+      let discovered: readonly ExternalCliModel[]
       try {
-        discovered = await discoverCliModels(profile)
+        discovered = await this.refreshCatalog(provider, profile)
       } catch (error) {
         // The settings discovery operation reports the failure; saved models remain usable in chat.
         if ((profile.models?.length ?? 0) === 0) throw error
         discovered = []
       }
-      const merged = new Map(discovered.map(model => [model.id, model]))
-      for (const model of profile.models ?? []) merged.set(model.id, model)
+      const merged = mergeModels(discovered, profile.models ?? [])
       return Promise.resolve([
         { provider, id: provider, name: `${profile.displayName ?? provider} (CLI default)` },
-        ...[...merged.values()].map(model => ({ provider, id: model.id, name: model.name ?? model.id })),
+        ...merged.map(model => ({ provider, id: model.id, name: model.name ?? model.id })),
       ])
     }
     if (provider.toLowerCase() === 'cli' || provider.toLowerCase() === 'external-cli') {
@@ -154,7 +157,8 @@ export class ExternalCliAdapter extends LlmAdapter {
   }
 
   /**
-   * Resolve exact model metadata without requiring network lookups.
+   * Resolve exact model metadata from the configured entries and the catalog
+   * last discovered for the route, without starting the CLI.
    * @param provider - Route identifier.
    * @param model - Model identifier.
    * @param _signal - Optional abort signal.
@@ -165,8 +169,9 @@ export class ExternalCliAdapter extends LlmAdapter {
     model: string,
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo> {
-    const profile = this.config.providers?.[provider] ?? this.config.providers?.[model]
-    const selected = profile?.models?.find(entry => entry.id === model)
+    const route = this.config.providers?.[provider]
+    const profile = route ?? this.config.providers?.[model]
+    const selected = this.catalog(provider, profile).find(entry => entry.id === model)
     const name = selected?.name ?? (selected === undefined ? profile?.displayName : model)
       ?? PRESET_NAMES[model.toLowerCase()]
       ?? PRESET_NAMES[provider.toLowerCase()]
@@ -190,16 +195,47 @@ export class ExternalCliAdapter extends LlmAdapter {
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const config = this.config
     const profile = config.providers?.[options.provider]
-    if (profile !== undefined && options.model !== options.provider
-      && !profile.models?.some(model => model.id === options.model)) {
-      const discovered = await discoverCliModels(profile, options.signal)
-      const models = new Map(discovered.map(model => [model.id, model]))
-      for (const model of profile.models ?? []) models.set(model.id, model)
-      yield* streamExternalCli({ ...config, providers: { ...config.providers,
-        [options.provider]: { ...profile, models: [...models.values()] },
-      } }, options)
+    if (profile === undefined) {
+      yield* streamExternalCli(config, options)
       return
     }
-    yield* streamExternalCli(config, options)
+    // A model the chat lists without saving it is served from a fresh catalog;
+    // a configured one streams with the catalog this adapter already holds.
+    if (options.model !== options.provider && !(profile.models ?? []).some(model => model.id === options.model)) {
+      await this.refreshCatalog(options.provider, profile, options.signal)
+    }
+    yield* streamExternalCli({ ...config, providers: { ...config.providers,
+      [options.provider]: { ...profile, models: this.catalog(options.provider, profile) },
+    } }, options)
+  }
+
+  /**
+   * Models a route offers: its configured entries over the catalog last
+   * discovered for it. Reads only; discovery refreshes through {@link refreshCatalog}.
+   * @param provider - Route identifier.
+   * @param profile - Profile configured for the route, when it has one.
+   * @returns One entry per model identifier, discovered models first.
+   */
+  private catalog(provider: string, profile: ExternalCliProviderProfile | undefined): ExternalCliModel[] {
+    const discovered = this.config.providers?.[provider] === undefined ? [] : this.catalogs.get(provider) ?? []
+    return mergeModels(discovered, profile?.models ?? [])
+  }
+
+  /**
+   * Discover one route's catalog and keep it for later resolutions. A failed
+   * discovery leaves the last good catalog in place.
+   * @param provider - Route identifier.
+   * @param profile - Executable and discovery limits.
+   * @param signal - Optional caller cancellation.
+   * @returns The discovered models, in CLI order.
+   */
+  private async refreshCatalog(
+    provider: string,
+    profile: ExternalCliProviderProfile,
+    signal?: AbortSignal,
+  ): Promise<readonly ExternalCliModel[]> {
+    const discovered = await discoverCliModels(profile, signal)
+    this.catalogs.set(provider, discovered)
+    return discovered
   }
 }

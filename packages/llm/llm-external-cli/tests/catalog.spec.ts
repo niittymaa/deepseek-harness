@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { execFile } from 'node:child_process'
 import { BlockAssembler } from '@deepseek-ai/dsh-llm'
 import { ExternalCliAdapter } from '../src/adapter.ts'
-import { cliType, discoverCliModels } from '../src/catalog.ts'
+import { cliType, discoverCliModels, mergeModels } from '../src/catalog.ts'
 
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(), execFile: vi.fn(),
@@ -38,8 +38,8 @@ describe('CLI catalog discovery', () => {
     await expect(discoverCliModels({ command: 'agy' })).rejects.toThrow()
   })
 
-  it('does not execute a command for providers without catalog support', async () => {
-    expect(await discoverCliModels({ command: 'codex' })).toEqual([])
+  it('starts no command for a provider that publishes no catalog', async () => {
+    expect(await discoverCliModels({ command: 'my-cli', cliType: 'custom' })).toEqual([])
     expect(execFile).not.toHaveBeenCalled()
   })
 
@@ -49,6 +49,24 @@ describe('CLI catalog discovery', () => {
     await discoverCliModels({ command: 'agy', timeoutMs: 25, discoveryMaxBytes: 512 }, controller.signal)
     expect(execFile).toHaveBeenCalledWith('agy', ['models'], expect.objectContaining({ signal: controller.signal, timeout: 25, maxBuffer: 512 }), expect.any(Function))
   })
+})
+
+
+it('keeps discovered metadata a configured entry does not declare', () => {
+  expect(mergeModels(
+    [{ id: 'discovered', name: 'Discovered name', reasoningEfforts: { low: 'low' } }],
+    [{ id: 'discovered' }, { id: 'configured', name: 'Configured', reasoningEfforts: { high: 'deep' } }],
+  )).toEqual([
+    { id: 'discovered', name: 'Discovered name', reasoningEfforts: { low: 'low' } },
+    { id: 'configured', name: 'Configured', reasoningEfforts: { high: 'deep' } },
+  ])
+})
+
+it('lets a configured name and reasoning levels replace the discovered ones', () => {
+  expect(mergeModels(
+    [{ id: 'shared', name: 'Discovered', reasoningEfforts: { low: 'low' } }],
+    [{ id: 'shared', name: 'Configured', reasoningEfforts: { high: 'high' } }],
+  )).toEqual([{ id: 'shared', name: 'Configured', reasoningEfforts: { high: 'high' } }])
 })
 
 

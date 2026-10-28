@@ -48,7 +48,11 @@ providers:
           high: high
 ```
 
-Agy discovers models with `agy models`, without a generation request. Its catalog is combined with configured models; a configured entry replaces the metadata of the same discovered identifier. Other CLI catalogs are configured in the Models settings editor. Discovery uses the profile timeout and `discoveryMaxBytes` output limit (default 1 MiB).
+Agy discovers models with `agy models`, Codex answers `model/list` over `codex app-server`, Claude Code discloses its models in the initialization metadata of `--print` stream mode, and Copilot answers `models.list` over its stdio channel. Each channel runs without a generation request and is stopped once the catalog arrives. Discovered models carry the reasoning levels their CLI advertises; the chat selector offers them without saving the model first. A configured entry overrides the name and levels it declares and keeps the discovered ones it leaves unset.
+
+Agy advertises one model identifier per reasoning level (`gemini-4-argon-low`, `gemini-4-argon-high`, …), so its entries carry no separate level map and the Effort selector stays empty for an Agy model. The CLI default entry never carries levels: it defers the model and the effort to the CLI's own configuration.
+
+Copilot advertises no text models on some installations. Its route then offers only the CLI default entry and its configured models. Discovery uses the profile timeout and `discoveryMaxBytes` output limit (default 1 MiB).
 
 Custom CLIs declare `modelArgs` and `effortArgs` arrays. Each `{model}` or `{effort}` occurrence is replaced within its argument without splitting values. For example, `modelArgs: ['--model', '{model}']`. Executable paths may select an explicit `cliType` independently of their filename.
 

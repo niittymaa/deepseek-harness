@@ -13,7 +13,7 @@ Configured external CLI routes publish actual model identifiers in the chat mode
 
 ## Migration
 
-1. In Models settings, edit each local CLI provider and add the model identifiers you want to select. Agy can fetch its catalog; other providers use the configured model list.
+1. In Models settings, edit each local CLI provider. The model list fetches the provider's catalog: Agy prints it, and Codex, Claude Code, and Copilot answer over their own metadata channels. The chat selector also offers discovered models with their advertised reasoning levels before they are saved.
 2. Declare supported reasoning levels per model. Remove `--model`, `--effort`, `--reasoning-effort`, and Codex model configuration overrides from base `args` when choosing models in chat.
 3. For a custom executable, select its CLI type or provide `modelArgs` and `effortArgs` arrays with `{model}` and `{effort}` placeholders.
 4. Choose a model and effort below the chat input and send a message. Select the provider's CLI default entry to preserve its own model and effort configuration. Existing profiles without model declarations retain this default entry.
