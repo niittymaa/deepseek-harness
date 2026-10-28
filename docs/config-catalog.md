@@ -1847,7 +1847,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 
 - `inject`: `llm`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-external-cli/src/index.ts:20`](../packages/llm/llm-external-cli/src/index.ts)
+- `source`: [`packages/llm/llm-external-cli/src/index.ts:21`](../packages/llm/llm-external-cli/src/index.ts)
 
 ```ts config-catalog
 /** Configuration accepted from the Loader or direct plugin mounting. */
@@ -1897,6 +1897,26 @@ export interface ExternalCliProviderProfile {
   shell?: boolean
   /** Human-facing display name. */
   displayName?: string
+  /** Models offered in the chat selector. */
+  models?: ExternalCliModel[]
+  /** Maximum discovery output size in bytes. */
+  discoveryMaxBytes?: number
+  /** CLI protocol, independent of executable filename. */
+  cliType?: 'agy' | 'claude' | 'codex' | 'copilot' | 'custom'
+  /** Custom model arguments; {model} is replaced in each argument. */
+  modelArgs?: string[]
+  /** Custom effort arguments; {effort} is replaced in each argument. */
+  effortArgs?: string[]
+}
+
+/** One selectable external CLI model. */
+export interface ExternalCliModel {
+  /** Identifier passed to the CLI model option. */
+  id: string
+  /** Display name in the chat selector. */
+  name?: string
+  /** Supported reasoning levels mapped to CLI values. */
+  reasoningEfforts?: Record<string, string | null>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-external-cli -->

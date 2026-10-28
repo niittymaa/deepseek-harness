@@ -28,6 +28,30 @@ Mount this plugin when you want DeepSeek Harness to dispatch prompts to a locall
 
 Choose this provider when working offline, utilizing subscription-authenticated local CLIs, or running local AI agents (Google Antigravity `agy`, OpenAI `codex`, Anthropic `claude`, GitHub `copilot`) without configuring a DeepSeek API key or HTTP endpoint.
 
+### Select a model in chat
+
+Configured CLI routes offer their actual models in the model selector below the chat input. Select a model and one of its declared reasoning efforts before sending a message. A running request retains its original selection. The CLI default entry preserves the CLI's own model and reasoning settings.
+
+Each `providers` profile accepts `cliType`, `models`, and optional custom argument arrays. A model has an `id`, optional `name`, and optional `reasoningEfforts` mapping from selectable effort identifiers to CLI values. Codex uses `--model` and `-c model_reasoning_effort=…`; Claude Code and Agy use `--model` and `--effort`; Copilot uses `--model` and `--reasoning-effort`. Remove conflicting model or effort options from the profile's base `args` before selecting an explicit model.
+
+```yaml
+providers:
+  codex:
+    command: codex
+    cliType: codex
+    args: [exec]
+    models:
+      - id: your-model-id
+        name: Your model
+        reasoningEfforts:
+          low: low
+          high: high
+```
+
+Agy discovers models with `agy models`, without a generation request. Its catalog is combined with configured models; a configured entry replaces the metadata of the same discovered identifier. Other CLI catalogs are configured in the Models settings editor. Discovery uses the profile timeout and `discoveryMaxBytes` output limit (default 1 MiB).
+
+Custom CLIs declare `modelArgs` and `effortArgs` arrays. Each `{model}` or `{effort}` occurrence is replaced within its argument without splitting values. For example, `modelArgs: ['--model', '{model}']`. Executable paths may select an explicit `cliType` independently of their filename.
+
 ### CLI Examples
 
 #### 1. Google Antigravity CLI (Agy)

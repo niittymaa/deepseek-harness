@@ -91,6 +91,7 @@ describe('LocalCliCard', () => {
           op: 'set',
           path: ['providers', 'agy'],
           value: {
+            cliType: 'agy',
             command: 'agy',
             args: ['--print', '-'],
             displayName: 'Agy CLI',
@@ -183,6 +184,7 @@ describe('ProviderEditor for CLI provider', () => {
       value: {
         providers: {
           agy: {
+            cliType: 'agy',
             command: 'agy',
             args: ['--print', '-'],
             displayName: 'Agy CLI',
@@ -192,6 +194,7 @@ describe('ProviderEditor for CLI provider', () => {
       user: {
         providers: {
           agy: {
+            cliType: 'agy',
             command: 'agy',
             args: ['--print', '-'],
             displayName: 'Agy CLI',

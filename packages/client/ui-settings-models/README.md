@@ -154,3 +154,7 @@ These limits define the editor's field coverage and the page's reach; they are c
 None.
 
 </details>
+
+### External CLI models
+
+Edit a local CLI provider to add its model identifiers and supported reasoning efforts. These models appear in the selector below the chat input. Agy's Fetch models action retrieves its CLI catalog; other CLI providers use the configured list. The CLI default entry preserves the CLI's own model and reasoning settings.

@@ -31,6 +31,8 @@ interface ModelRowProps {
   inputLoading?: boolean
   /** Levels the row's `reasoningEfforts` may declare; absent or empty shows no reasoning control. */
   reasoningLevels?: readonly string[] | undefined
+  /** CLI models expose reasoning settings without API capacity or input controls. */
+  cli?: boolean | undefined
   expanded: boolean
   disabled: boolean
   t: (key: ModelsKey) => string
@@ -145,7 +147,7 @@ export function ModelRow(props: ModelRowProps): ReactNode {
       {props.expanded
         ? (
           <div className={styles['modelAdvanced']}>
-            {(['contextWindow', 'maxTokens'] as const).map(field => (
+            {(props.cli === true ? [] : ['contextWindow', 'maxTokens'] as const).map(field => (
               <label className={styles['modelField']} key={field}>
                 <span className={styles['modelFieldLabel']}>{t(field)}</span>
                 <input
@@ -161,10 +163,10 @@ export function ModelRow(props: ModelRowProps): ReactNode {
                 />
               </label>
             ))}
-            <ModelInputTypes
+            {props.cli === true ? null : <ModelInputTypes
               model={model} field={props.inputField} position={position}
               fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
-            />
+            />}
             {props.reasoningLevels !== undefined && props.reasoningLevels.length > 0
               ? (
                 <ModelReasoningEfforts

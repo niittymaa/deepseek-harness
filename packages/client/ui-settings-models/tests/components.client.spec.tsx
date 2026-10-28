@@ -1989,7 +1989,7 @@ describe('ModelsSection', () => {
     await mountFace(scripted)
     fireEvent.click(screen.getByRole('button', { name: en.add }))
     expect(screen.getByRole('tab', { name: en.addCatalog }).getAttribute('title')).toBe(en.addCatalogExhausted)
-    expect(screen.getByRole('tab', { name: en.addCustom }).getAttribute('title')).toBeNull()
+    expect(screen.getByRole('tab', { name: en.addCustom }).getAttribute('title')).toBe(en.addCustom)
   })
 
   it('explains a mode with no protocol to declare through its hover title', async () => {
@@ -2004,7 +2004,7 @@ describe('ModelsSection', () => {
     await mountFace(scripted)
     fireEvent.click(screen.getByRole('button', { name: en.add }))
     expect(screen.getByRole('tab', { name: en.addCustom }).getAttribute('title')).toBe(en.addCustomUnavailable)
-    expect(screen.getByRole('tab', { name: en.addCatalog }).getAttribute('title')).toBeNull()
+    expect(screen.getByRole('tab', { name: en.addCatalog }).getAttribute('title')).toBe(en.addCatalog)
   })
 
   it('collapses the add card from the custom mode on cancel', async () => {
@@ -2436,4 +2436,55 @@ it.each([es, fr, de, ru, pt])('keeps capacity examples in translated validation 
       expect(parseCapacity(token!)).toBeGreaterThan(0)
     }
   }
+})
+
+
+describe('CLI model settings', () => {
+  function mountCliEditor() {
+    const scripted = scriptedFace()
+    const profile = { command: 'codex', cliType: 'codex', models: [{ id: 'selected-model', reasoningEfforts: { high: 'high' } }] }
+    const namespace: SettingsNamespaceView = {
+      ns: 'llm-external-cli', schema: JSON.parse(JSON.stringify(Schema.object({ providers: Schema.dict(Schema.object({
+        command: Schema.string(), cliType: Schema.string(), models: Schema.array(Schema.object({ id: Schema.string() })),
+        modelArgs: Schema.array(Schema.string()), effortArgs: Schema.array(Schema.string()),
+      })) }).toJSON())) as JsonValue,
+      value: { providers: { codex: profile } }, user: { providers: { codex: profile } },
+      applies: 'live', autoGenerate: false, secrets: [], revision: 0,
+    }
+    render(<ProviderEditor provider="codex" displayName="Codex CLI" namespace={namespace}
+      settingsPath={['providers', 'codex']} schema={settingsSchema} operations={operationsWith(scripted.face)}
+      t={t} readOnly={false} onClose={vi.fn()} />)
+    return scripted
+  }
+
+  it('shows CLI model reasoning controls without API capacity or input controls', () => {
+    mountCliEditor()
+    expect(screen.getByDisplayValue('selected-model')).toBeTruthy()
+    expandRow(1)
+    expect(screen.getByRole('group', { name: `${en.modelReasoning} 1` })).toBeTruthy()
+    expect(screen.queryByLabelText(`${en.contextWindow} 1`)).toBeNull()
+    expect(screen.queryByLabelText(`${en.maxTokens} 1`)).toBeNull()
+    expect(screen.queryByLabelText(`${en.modelInputTypes} 1`)).toBeNull()
+  })
+
+  it('blocks incomplete custom argument JSON until the array is valid', () => {
+    mountCliEditor()
+    const input = screen.getByRole('textbox', { name: en.cliModelArgs })
+    fireEvent.change(input, { target: { value: '[' } })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(true)
+    fireEvent.change(input, { target: { value: '["--model", "{model}"]' } })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(false)
+  })
+
+  it('requires conflicting model arguments to be removed before saving a selectable catalog', () => {
+    mountCliEditor()
+    const input = screen.getByRole('textbox', { name: en.cliArgs })
+    fireEvent.change(input, { target: { value: 'exec --model other' } })
+    expect(screen.getByText(en.cliArgumentConflict)).toBeTruthy()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(true)
+    fireEvent.change(input, { target: { value: 'exec' } })
+    expect(screen.queryByText(en.cliArgumentConflict)).toBeNull()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(false)
+  })
+
 })

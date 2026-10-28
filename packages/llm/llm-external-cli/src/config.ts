@@ -7,6 +7,23 @@
 import type { Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 
+/** One selectable external CLI model. */
+export interface ExternalCliModel {
+  /** Identifier passed to the CLI model option. */
+  id: string
+  /** Display name in the chat selector. */
+  name?: string
+  /** Supported reasoning levels mapped to CLI values. */
+  reasoningEfforts?: Record<string, string | null>
+}
+
+/** Selectable model settings. */
+const ModelSchema: z<ExternalCliModel> = z.object({
+  id: z.string().required(),
+  name: z.string(),
+  reasoningEfforts: z.dict(z.union([z.string(), z.const(null)])),
+})
+
 /** Configuration profile for one external CLI provider route. */
 export interface ExternalCliProviderProfile {
   /** The executable name (e.g. agy, codex, claude, copilot). */
@@ -19,6 +36,16 @@ export interface ExternalCliProviderProfile {
   shell?: boolean
   /** Human-facing display name. */
   displayName?: string
+  /** Models offered in the chat selector. */
+  models?: ExternalCliModel[]
+  /** Maximum discovery output size in bytes. */
+  discoveryMaxBytes?: number
+  /** CLI protocol, independent of executable filename. */
+  cliType?: 'agy' | 'claude' | 'codex' | 'copilot' | 'custom'
+  /** Custom model arguments; {model} is replaced in each argument. */
+  modelArgs?: string[]
+  /** Custom effort arguments; {effort} is replaced in each argument. */
+  effortArgs?: string[]
 }
 
 /** Schemastery validator for one CLI provider profile. */
@@ -28,6 +55,11 @@ export const ExternalCliProviderProfileSchema: z<ExternalCliProviderProfile> = z
   timeoutMs: z.number().description('Command execution timeout in milliseconds'),
   shell: z.boolean().description('Whether to run command via shell'),
   displayName: z.string().description('Human-facing display name'),
+  models: z.array(ModelSchema),
+  discoveryMaxBytes: z.number().min(1),
+  cliType: z.union(['agy', 'claude', 'codex', 'copilot', 'custom']),
+  modelArgs: z.array(z.string()),
+  effortArgs: z.array(z.string()),
 })
 
 /** Configuration options for the external CLI provider plugin. */

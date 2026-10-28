@@ -6,14 +6,17 @@
 
 import {
   LlmAdapter,
+  LlmError,
+  ReasoningEffortId,
   type GenerateOptions,
   type LlmModelInfo,
   type LlmProviderInfo,
   type LlmResolvedModelInfo,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { ExternalCliOptions } from './config.ts'
+import type { ExternalCliModel, ExternalCliOptions } from './config.ts'
 import { streamExternalCli } from './process.ts'
+import { discoverCliModels } from './catalog.ts'
 
 /** Default context window token limit for external CLI models. */
 export const DEFAULT_CONTEXT_WINDOW = 128000
@@ -24,6 +27,24 @@ const PRESET_NAMES: Record<string, string> = {
   claude: 'Claude Code CLI',
   codex: 'Codex CLI',
   copilot: 'GitHub Copilot CLI',
+}
+
+/** Refuse ambiguous configured catalogs before publishing model choices. */
+function validateCatalogs(config: ExternalCliOptions): void {
+  for (const [provider, profile] of Object.entries(config.providers ?? {})) {
+    const seen = new Set<string>([provider])
+    for (const model of profile.models ?? []) {
+      if (model.id.trim().length === 0 || seen.has(model.id)) {
+        throw new LlmError(`CLI model identifiers must be non-empty and unique, and cannot equal the provider identifier: ${provider}`, 'CLI_INVALID_MODELS')
+      }
+      seen.add(model.id)
+      for (const [effort, value] of Object.entries(model.reasoningEfforts ?? {})) {
+        if (effort.trim().length === 0 || (value !== null && value.trim().length === 0)) {
+          throw new LlmError(`CLI reasoning levels and values must be non-empty: ${provider}/${model.id}`, 'CLI_INVALID_EFFORTS')
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -38,6 +59,7 @@ export class ExternalCliAdapter extends LlmAdapter {
    */
   constructor(config: ExternalCliOptions = {}) {
     super()
+    validateCatalogs(config)
     this.config = config
   }
 
@@ -46,6 +68,7 @@ export class ExternalCliAdapter extends LlmAdapter {
    * @param config - New external CLI options.
    */
   updateConfig(config: ExternalCliOptions): void {
+    validateCatalogs(config)
     this.config = config
   }
 
@@ -74,7 +97,24 @@ export class ExternalCliAdapter extends LlmAdapter {
    * @param provider - Route identifier.
    * @returns List of model descriptors.
    */
-  override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+  override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    const profile = this.config.providers?.[provider]
+    if (profile !== undefined) {
+      let discovered: ExternalCliModel[]
+      try {
+        discovered = await discoverCliModels(profile)
+      } catch (error) {
+        // The settings discovery operation reports the failure; saved models remain usable in chat.
+        if ((profile.models?.length ?? 0) === 0) throw error
+        discovered = []
+      }
+      const merged = new Map(discovered.map(model => [model.id, model]))
+      for (const model of profile.models ?? []) merged.set(model.id, model)
+      return Promise.resolve([
+        { provider, id: provider, name: `${profile.displayName ?? provider} (CLI default)` },
+        ...[...merged.values()].map(model => ({ provider, id: model.id, name: model.name ?? model.id })),
+      ])
+    }
     if (provider.toLowerCase() === 'cli' || provider.toLowerCase() === 'external-cli') {
       const configuredIds = Object.keys(this.config.providers ?? {})
       if (configuredIds.length > 0) {
@@ -126,7 +166,8 @@ export class ExternalCliAdapter extends LlmAdapter {
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo> {
     const profile = this.config.providers?.[provider] ?? this.config.providers?.[model]
-    const name = profile?.displayName
+    const selected = profile?.models?.find(entry => entry.id === model)
+    const name = selected?.name ?? (selected === undefined ? profile?.displayName : model)
       ?? PRESET_NAMES[model.toLowerCase()]
       ?? PRESET_NAMES[provider.toLowerCase()]
       ?? model
@@ -135,6 +176,9 @@ export class ExternalCliAdapter extends LlmAdapter {
       id: model,
       name,
       context: { contextWindow: DEFAULT_CONTEXT_WINDOW },
+      ...selected?.reasoningEfforts === undefined ? {} : {
+        reasoning: { efforts: Object.keys(selected.reasoningEfforts).map(id => ({ id: ReasoningEffortId(id), name: id })) },
+      },
     })
   }
 
@@ -143,7 +187,19 @@ export class ExternalCliAdapter extends LlmAdapter {
    * @param options - Full generate options.
    * @returns Async iterable yielding canonical StreamChunks.
    */
-  override stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    return streamExternalCli(this.config, options)
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const config = this.config
+    const profile = config.providers?.[options.provider]
+    if (profile !== undefined && options.model !== options.provider
+      && !profile.models?.some(model => model.id === options.model)) {
+      const discovered = await discoverCliModels(profile, options.signal)
+      const models = new Map(discovered.map(model => [model.id, model]))
+      for (const model of profile.models ?? []) models.set(model.id, model)
+      yield* streamExternalCli({ ...config, providers: { ...config.providers,
+        [options.provider]: { ...profile, models: [...models.values()] },
+      } }, options)
+      return
+    }
+    yield* streamExternalCli(config, options)
   }
 }
