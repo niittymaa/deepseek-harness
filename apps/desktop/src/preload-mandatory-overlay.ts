@@ -70,7 +70,7 @@ export function installMandatoryUpdateOverlay(): void {
   void ipcRenderer.invoke(MANDATORY_IPC.status).then((initial: MandatoryUpdateView) => {
     if (!disposed && state === undefined) { state = initial; render() }
   }, () => {
-    // Development may omit policy configuration; a later main-frame load still resynchronizes configured policy.
+    // A failed early query only delays a blocking overlay until the shell pushes its policy state.
   })
   window.addEventListener('keydown', blockBackgroundKey, true)
   window.addEventListener('DOMContentLoaded', render, { once: true })

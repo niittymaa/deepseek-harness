@@ -1604,6 +1604,16 @@ describe('desktop main startup', () => {
     } finally { host.exited.resolve(); await harness.quitCompleted.promise }
   })
 
+  it('answers the product document policy query while no policy is configured', async () => {
+    await readyForUpdate()
+    const sender = harness.windows[0]!.webContents
+    const event = { sender, senderFrame: sender.mainFrame }
+    expect(harness.handlers.get(MANDATORY_IPC.status)!(event)).toMatchObject({
+      policy: { blocking: false, checking: false }, deferred: false })
+    expect(() => harness.handlers.get(MANDATORY_IPC.action)!(event, 'refresh'))
+      .toThrow('no mandatory decision is active')
+  })
+
   it('blocks subsequent product operations without stopping the Host and clears only on a fresh no-force policy', async () => {
     harness.embeddedPolicy = { origin: 'https://policy.example.com',
       allowedPageOrigins: ['https://downloads.example.com'], intervalMs: 10_000, jitter: 0 }

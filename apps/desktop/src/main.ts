@@ -1347,18 +1347,23 @@ async function main(): Promise<void> {
       if (state.blocking && !wasBlocking) void updateSchedule.check(false, true).catch((error: unknown) => { console.error(error) })
       wasBlocking = state.blocking
     }, policyAuth?.request, () => desktopClientMetadata(locale.id))
-    const policy = mandatoryPolicy
-    mandatoryUI = new DesktopMandatoryUpdateWindow({
-      overlays: updateOverlays,
-      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale,
-      allowedPageOrigins: policyConfig.allowedPageOrigins, parent: () => mainWindow,
-      policy: () => policy.state, update: () => updates.state,
-      refresh: async () => { await Promise.all([checkPolicyManually(), updateSchedule.check(true)]) },
-      download: downloadUpdate, install: version => updates.install(version),
-    })
     void mandatoryPolicy.check('launch').then((state) => {
       if (app.isPackaged && state.error === 'authentication-required' && !isQuitting()) queuePolicyAuthentication()
     }).catch((error: unknown) => { console.error(error) })
+  }
+  // The product document queries this surface on every Windows load. Register it there without configuration too,
+  // so an unconfigured policy answers as inactive instead of leaving that query unhandled; elsewhere only a
+  // configured policy can open the shell-owned presentation.
+  if (process.platform === 'win32' || policyConfig !== undefined) {
+    const inactivePolicy: DesktopPolicyState = { blocking: false, checking: false }
+    mandatoryUI = new DesktopMandatoryUpdateWindow({
+      overlays: updateOverlays,
+      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale,
+      allowedPageOrigins: policyConfig?.allowedPageOrigins ?? [], parent: () => mainWindow,
+      policy: () => mandatoryPolicy?.state ?? inactivePolicy, update: () => updates.state,
+      refresh: async () => { await Promise.all([checkPolicyManually(), updateSchedule.check(true)]) },
+      download: downloadUpdate, install: version => updates.install(version),
+    })
   }
   automaticCheck()
   await reconcileBackend().catch(() => undefined)
