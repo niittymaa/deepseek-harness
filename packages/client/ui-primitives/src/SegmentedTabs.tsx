@@ -7,6 +7,8 @@ import css from './SegmentedTabs.module.css'
 export interface SegmentedTab<Value extends string = string> {
   value: Value
   label: ReactNode
+  /** Full hover text; string labels use their text when this is omitted. */
+  title?: string
   id: string
   panelId: string
 }
@@ -20,6 +22,8 @@ export interface SegmentedTab<Value extends string = string> {
  * @param props.label - localized accessible name for the tab list.
  * @param props.className - layout placement; panels remain caller-owned.
  * @param props.size - `sm` draws 30px tabs with a 2px inset (34px tall); the default `md` draws 34px tabs with a 4px inset (42px tall).
+ * Labels truncate to fit their equal-width tab. String labels appear in full
+ * on hover; provide `title` when a non-string label needs hover text.
  * @returns the tab list, without its panels.
  */
 export function SegmentedTabs<Value extends string>({ items, value, onChange, label, className, size = 'md' }: {
@@ -75,8 +79,9 @@ export function SegmentedTabs<Value extends string>({ items, value, onChange, la
           tabIndex={value === item.value ? 0 : -1}
           onClick={() => { onChange(item.value) }}
           onKeyDown={(event) => { onKeyDown(event, index) }}
+          title={item.title ?? (typeof item.label === 'string' ? item.label : undefined)}
         >
-          {item.label}
+          <span className={css.label}>{item.label}</span>
         </Pill>
       ))}
     </div>

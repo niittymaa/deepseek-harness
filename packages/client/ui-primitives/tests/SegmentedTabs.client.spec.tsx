@@ -17,6 +17,7 @@ describe('SegmentedTabs', () => {
     const onChange = vi.fn()
     const { rerender } = render(<SegmentedTabs items={items} value="details" onChange={onChange} label="Help" />)
     const examples = screen.getByRole('tab', { name: 'Examples' })
+    expect(examples.getAttribute('title')).toBe('Examples')
     fireEvent.click(examples)
     expect(onChange).toHaveBeenCalledWith('examples')
     expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Details')
@@ -29,6 +30,15 @@ describe('SegmentedTabs', () => {
     expect(examples.tabIndex).toBe(0)
     expect(screen.getByRole('tab', { name: 'Details' }).tabIndex).toBe(-1)
     expect(screen.getByRole('tablist', { name: 'Help' })).toBeTruthy()
+  })
+
+  it('uses the supplied hover text for non-string labels', () => {
+    const richItems = [
+      { ...items[0], label: <strong>Details</strong>, title: 'Full details label' },
+      items[1],
+    ] as const
+    render(<SegmentedTabs items={richItems} value="details" onChange={() => {}} label="Help" />)
+    expect(screen.getByRole('tab', { name: 'Details' }).getAttribute('title')).toBe('Full details label')
   })
 
   it.each(['sm', 'md'] as const)('%s moves focus and selection with arrows, Home, and End, and leaves Tab alone', (size) => {

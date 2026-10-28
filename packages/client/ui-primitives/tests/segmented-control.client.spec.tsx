@@ -44,6 +44,7 @@ describe('SegmentedControl', () => {
     const list = screen.getByRole('tablist', { name: 'Add mode' })
     expect(list.querySelectorAll('[role="tab"]')).toHaveLength(3)
     expect(tab('Catalog').getAttribute('aria-selected')).toBe('false')
+    expect(tab('Catalog').getAttribute('title')).toBe('Catalog')
     expect(tab('Custom').getAttribute('aria-selected')).toBe('true')
     expect(tab('Import').getAttribute('aria-selected')).toBe('false')
   })

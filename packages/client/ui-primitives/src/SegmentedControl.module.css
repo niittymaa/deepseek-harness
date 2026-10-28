@@ -4,15 +4,16 @@
  * the soft elevation shadow (border: 0), the way every elevated surface draws
  * its edge, so the elevation gate keeps it off the alias-border set.
  *
- * Segments are equal-width grid tracks sized to the widest label, which is
- * what lets one indicator be placed arithmetically: the tablist carries the
- * segment count and the selected index as custom properties, and the indicator
- * derives its width and offset from them instead of measuring the DOM. */
+ * Segments are equal-width grid tracks within the available width. The tablist
+ * carries the segment count and selected index as custom properties, so the
+ * indicator derives its width and offset without measuring the DOM. */
 .control {
+  box-sizing: border-box;
   position: relative;
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+  display: grid;
+  grid-template-columns: repeat(var(--dsh-segment-count), minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
   gap: 2px;
   padding: 4px;
   border-radius: var(--dsw-radius-md);
@@ -38,6 +39,7 @@
   box-sizing: border-box;
   position: relative;
   z-index: 1;
+  min-width: 0;
   height: 28px;
   padding: 0 16px;
   border: 0;
@@ -51,6 +53,15 @@
   white-space: nowrap;
   cursor: pointer;
   transition: color 120ms ease;
+}
+
+.label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab[aria-selected='true'] {

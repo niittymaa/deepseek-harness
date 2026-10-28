@@ -19,7 +19,7 @@ export interface SegmentedControlOption<Value extends string> {
   label: string
   /** Whether the segment refuses selection. */
   disabled?: boolean
-  /** Localized hover text, typically why the segment is locked. */
+  /** Localized hover text; defaults to the full label and can explain why a segment is locked. */
   title?: string
 }
 
@@ -65,6 +65,8 @@ function walk<Value extends string>(
  * @param props.disabled - lock every segment, typically while the shown panel
  * has a write or a fetch in flight that switching would orphan.
  * @param props.className - extra class for layout placement.
+ * Segment labels truncate to fit their equal-width segment; `title` exposes
+ * the full label on hover unless the owner supplies other hover text.
  * @returns the tablist element.
  */
 export function SegmentedControl<Value extends string>({
@@ -126,12 +128,12 @@ export function SegmentedControl<Value extends string>({
             aria-controls={`${id}-${option.value}-panel`}
             tabIndex={active ? 0 : -1}
             disabled={disabled || option.disabled === true}
-            title={option.title}
+            title={option.title ?? option.label}
             className={css.tab}
             onClick={() => { if (!active) onChange(option.value) }}
             onKeyDown={onKeyDown}
           >
-            {option.label}
+            <span className={css.label}>{option.label}</span>
           </button>
         )
       })}

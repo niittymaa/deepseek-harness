@@ -21,6 +21,7 @@
 
 .tab {
   position: relative;
+  min-width: 0;
   justify-content: center;
   height: 34px;
   padding: 0 12px;
@@ -30,6 +31,15 @@
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   transition: color 180ms ease;
+}
+
+.label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab[aria-selected='true'] {
