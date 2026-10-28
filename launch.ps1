@@ -5,7 +5,8 @@
 .DESCRIPTION
     Checks for remote repository updates, pulls latest changes if available,
     installs dependencies and builds artifacts when needed, and starts the application.
-    By default, starts as a desktop application and ensures no background processes remain on exit.
+    By default, starts as a desktop application. Desktop cleanup stops only process trees
+    whose Electron entry argument identifies this checkout; unrelated Electron apps are preserved.
 
 .PARAMETER Target
     Application target to start: 'desktop' (default) or 'web'.
@@ -40,6 +41,7 @@ param(
 )
 
 Set-Location -Path $PSScriptRoot
+. (Join-Path $PSScriptRoot "scripts/launcher-processes.ps1")
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "       DeepSeek Harness Launcher          " -ForegroundColor Cyan
@@ -247,12 +249,8 @@ if ($needsBuild) {
 
 # 3. Clean up stale background processes
 if ($Target -eq 'desktop') {
-    # If any stale electron or DeepSeek Harness instances are lingering, terminate them
-    $staleProcesses = Get-Process | Where-Object { $_.ProcessName -like "*electron*" -or $_.ProcessName -like "*DeepSeek Harness*" } -ErrorAction SilentlyContinue
-    if ($staleProcesses) {
-        Write-Host "Cleaning up previous background electron/app instance..." -ForegroundColor Cyan
-        $staleProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
-    }
+    Write-Host "Cleaning up previous desktop processes from this checkout..." -ForegroundColor Cyan
+    Stop-HarnessDesktopProcesses -RepositoryRoot $PSScriptRoot
 } elseif ($Target -eq 'web') {
     # Check port conflicts for web mode
     $portConn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -312,7 +310,7 @@ try {
     # Ensure all background processes are cleaned up when the app exits
     if ($Target -eq 'desktop') {
         Write-Host "`nShutting down desktop environment..." -ForegroundColor Cyan
-        Get-Process -Name "electron" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Stop-HarnessDesktopProcesses -RepositoryRoot $PSScriptRoot
     }
 }
 
