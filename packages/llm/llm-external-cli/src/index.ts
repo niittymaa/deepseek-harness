@@ -60,45 +60,50 @@ export function apply(ctx: Context, config: Config | ExternalCliOptions = {}): v
     adapter.updateConfig(effectiveConfig)
 
     const configuredIds = Object.keys(effectiveConfig.providers ?? {})
-    const allRoutes = Array.from(new Set([
-      primaryProvider,
-      'external-cli',
-      'agy',
-      'codex',
-      'claude',
-      'copilot',
-      ...configuredIds,
-    ]))
+    const hasTopLevelCommand = effectiveConfig.command !== undefined
+    const hasAnyConfig = hasTopLevelCommand || configuredIds.length > 0
+    const allRoutes = hasAnyConfig
+      ? Array.from(new Set([
+        'cli',
+        ...hasTopLevelCommand ? [primaryProvider] : [],
+        ...configuredIds,
+      ]))
+      : []
 
     if (adapterRegistration === undefined) {
-      adapterRegistration = ctx.llm.registerAdapter(allRoutes, adapter)
+      if (allRoutes.length > 0) {
+        adapterRegistration = ctx.llm.registerAdapter(allRoutes, adapter)
+      }
     } else {
       adapterRegistration.replace(allRoutes)
     }
 
-    const directoryEntries: LlmConfigurableProvider[] = configuredIds.length > 0
-      ? configuredIds.map((id) => {
-        const profile = effectiveConfig.providers?.[id]
-        return {
-          provider: id,
-          displayName: profile?.displayName ?? `${id.charAt(0).toUpperCase() + id.slice(1)} CLI`,
-          settingsNs: name,
-          settingsPath: ['providers', id],
-          declared: true,
-        }
+    const directoryEntries: LlmConfigurableProvider[] = []
+    if (hasTopLevelCommand) {
+      directoryEntries.push({
+        provider: primaryProvider,
+        displayName: primaryProvider === 'external-cli' ? 'External CLI' : `${primaryProvider.charAt(0).toUpperCase() + primaryProvider.slice(1)} CLI`,
+        settingsNs: name,
+        settingsPath: ['providers', primaryProvider],
+        declared: true,
       })
-      : [
-        {
-          provider: primaryProvider,
-          displayName: 'External CLI',
-          settingsNs: name,
-          settingsPath: ['providers', primaryProvider],
-          declared: true,
-        },
-      ]
+    }
+    for (const id of configuredIds) {
+      if (hasTopLevelCommand && id === primaryProvider) continue
+      const profile = effectiveConfig.providers?.[id]
+      directoryEntries.push({
+        provider: id,
+        displayName: profile?.displayName ?? `${id.charAt(0).toUpperCase() + id.slice(1)} CLI`,
+        settingsNs: name,
+        settingsPath: ['providers', id],
+        declared: true,
+      })
+    }
 
     if (directoryRegistration === undefined) {
-      directoryRegistration = ctx.llm.registerConfigurableProviders(directoryEntries)
+      if (directoryEntries.length > 0) {
+        directoryRegistration = ctx.llm.registerConfigurableProviders(directoryEntries)
+      }
     } else {
       directoryRegistration.replace(directoryEntries)
     }

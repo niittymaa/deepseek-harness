@@ -244,20 +244,59 @@ describe('ExternalCliAdapter', () => {
 })
 
 describe('Cordis plugin registration', () => {
-  it('registers external-cli and aliases in LlmRuntime without requiring an API key', async () => {
+  it('remains dormant when mounted without command or providers', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmExternalCli, {})
+
+    expect(ctx.llm.listProviders()).toEqual([])
+    expect(ctx.llm.listConfigurableProviders()).toEqual([])
+  })
+
+  it('registers external-cli in LlmRuntime when top-level command is configured', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmExternalCli, { command: 'agy' })
 
     const providers = ctx.llm.listProviders().map(p => p.id)
+    expect(providers).toContain('cli')
     expect(providers).toContain('external-cli')
-    expect(providers).toContain('agy')
-    expect(providers).toContain('codex')
-    expect(providers).toContain('claude')
-    expect(providers).toContain('copilot')
 
     const configurable = ctx.llm.listConfigurableProviders().map(p => p.provider)
-    expect(configurable).toContain('external-cli')
+    expect(configurable).toEqual(['external-cli'])
+  })
+
+  it('updates registrations dynamically on loader/volatile-update', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    let currentProviders: Record<string, LlmExternalCli.ExternalCliProviderProfile> = {}
+    const DynamicPlugin = (innerCtx: Context, cfg: LlmExternalCli.Config): void => {
+      LlmExternalCli.apply(innerCtx, cfg)
+    }
+    DynamicPlugin.inject = ['llm']
+
+    await ctx.plugin(
+      DynamicPlugin,
+      {
+        providers: {
+          get: () => currentProviders,
+        },
+      } as unknown as LlmExternalCli.Config,
+    )
+
+    expect(ctx.llm.listProviders()).toEqual([])
+
+    currentProviders = {
+      agy: {
+        command: 'agy',
+        displayName: 'Agy CLI',
+      },
+    }
+    ctx.emit('loader/volatile-update', [['providers']])
+
+    expect(ctx.llm.listProviders().map(p => p.id)).toContain('cli')
+    expect(ctx.llm.listProviders().map(p => p.id)).toContain('agy')
+    expect(ctx.llm.listConfigurableProviders().map(p => p.provider)).toEqual(['agy'])
   })
 
   it('runs keyless without requiring DEEPSEEK_API_KEY or credentials service', async () => {
@@ -340,9 +379,17 @@ describe('Cordis plugin registration', () => {
     const providers = ctx.llm.listProviders()
     const info = providers.find(p => p.id === 'agy')
     expect(info?.name).toBe('Agy Assistant')
+    const cliInfo = providers.find(p => p.id === 'cli')
+    expect(cliInfo?.name).toBe('CLI')
+
+    // Models under CLI provider group
+    const cliModels = await ctx.llm.listModels('cli')
+    expect(cliModels).toEqual([
+      { provider: 'cli', id: 'agy', name: 'Agy Assistant' },
+    ])
 
     const stream = ctx.llm.stream({
-      provider: 'agy',
+      provider: 'cli',
       model: 'agy',
       messages: [
         createUserMessage({
