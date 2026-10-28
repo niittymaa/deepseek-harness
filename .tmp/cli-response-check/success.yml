@@ -1,0 +1,4 @@
+- id: llm-external-cli
+  config:
+    command: node
+    args: ['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.stdout.write("CLI_RESPONSE_OK"))']
