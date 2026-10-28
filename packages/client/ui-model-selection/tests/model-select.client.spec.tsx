@@ -1056,3 +1056,19 @@ it('restores the account model name after login without changing the saved route
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek FlashHigh')
   expect(directory.getSnapshot().current).toEqual(selected)
 })
+
+
+it('selects a CLI model reasoning effort through the existing composer control', async () => {
+  const directory = createSnapshotStore<ModelDirectoryState>(state({
+    current: { provider: 'codex', model: 'selected-model' },
+    groups: [{ id: 'codex', name: 'Codex CLI', models: [{ id: 'selected-model', name: 'Selected CLI model',
+      reasoning: { efforts: [{ id: 'high', name: 'High' }] },
+    }] }],
+  }))
+  const select = vi.fn(async (_selection: ModelSelection) => ({ ok: true as const, value: undefined }))
+  render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory} load={vi.fn()} select={select} t={t} />)
+  fireEvent.click(screen.getByRole('button', { name: /Selected CLI model/ }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'High' }))
+  await waitFor(() => { expect(select).toHaveBeenCalledWith({ provider: 'codex', model: 'selected-model', reasoningEffort: 'high' }) })
+})

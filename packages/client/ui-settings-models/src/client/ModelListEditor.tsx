@@ -69,6 +69,8 @@ export interface ProbeTarget {
 
 /** Props of {@link ModelListEditor}. */
 export interface ModelListEditorProps {
+  /** Omit API-only input and capacity fields for CLI models. */
+  cli?: boolean | undefined
   /** The rows as currently drafted. */
   models: readonly ModelDraft[]
   /** Installed provider whose catalog supplies defaults without endpoint I/O. */
@@ -356,6 +358,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             inputFallback={inputDefaults.get(textOf(model, 'id')) ?? props.defaultInput}
             inputLoading={catalogProvider !== undefined && catalog === undefined}
             reasoningLevels={props.reasoningLevels}
+            cli={props.cli}
             expanded={expanded}
             disabled={disabled}
             t={t}

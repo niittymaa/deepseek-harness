@@ -151,6 +151,7 @@ export function LocalCliCard(props: LocalCliCardProps): ReactNode {
     try {
       const parsedArgs = args.trim().length > 0 ? args.trim().split(/\s+/) : []
       const profile = {
+        cliType: preset,
         command: command.trim(),
         ...parsedArgs.length > 0 ? { args: parsedArgs } : {},
         ...displayName.trim().length > 0 ? { displayName: displayName.trim() } : {},

@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process'
 import type { ContentBlock, GenerateOptions, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { ExternalCliOptions } from './config.ts'
+import { cliType } from './catalog.ts'
 
 /** Default execution timeout in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 120000
@@ -142,6 +143,30 @@ export function resolveCommandAndArgs(
     }
   }
 
+  const selected = profile?.models?.find(model => model.id === options.model)
+  if (profile !== undefined && options.provider !== 'cli' && options.model !== options.provider && selected === undefined) {
+    throw new LlmError('The selected CLI model is unavailable. Select a model from the chat menu.', 'CLI_MODEL_UNAVAILABLE')
+  }
+  if (selected !== undefined) {
+    const kind = cliType({ ...profile, command })
+    if (args.some(arg => /^(--model|-m|--effort|--reasoning-effort)(=|$)/.test(arg)
+      || /^(?:--config=|-c)?(?:model|model_reasoning_effort)=/.test(arg))) {
+      throw new LlmError('Remove model and effort overrides from the CLI arguments before selecting a model', 'CLI_ARGUMENT_CONFLICT')
+    }
+    const modelArgs = profile?.modelArgs ?? (kind === 'custom' ? undefined : ['--model', '{model}'])
+    if (modelArgs === undefined) throw new LlmError('Configure modelArgs for this custom CLI', 'CLI_MODEL_ARGS_REQUIRED')
+    args.push(...modelArgs.map(arg => arg.replaceAll('{model}', selected.id)))
+    if (options.reasoningEffort !== undefined) {
+      const effort = selected.reasoningEfforts?.[options.reasoningEffort]
+      if (effort === undefined) throw new LlmError('The selected model does not support this effort', 'CLI_UNSUPPORTED_EFFORT')
+      const effortArgs = profile?.effortArgs ?? (kind === 'codex'
+        ? ['-c', 'model_reasoning_effort={effort}']
+        : kind === 'copilot' ? ['--reasoning-effort', '{effort}']
+          : kind === 'custom' ? undefined : ['--effort', '{effort}'])
+      if (effortArgs === undefined) throw new LlmError('Configure effortArgs for this custom CLI', 'CLI_EFFORT_ARGS_REQUIRED')
+      if (effort !== null) args.push(...effortArgs.map(arg => arg.replaceAll('{effort}', effort)))
+    }
+  }
   return { command, args }
 }
 

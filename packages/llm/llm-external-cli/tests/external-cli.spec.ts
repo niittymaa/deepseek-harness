@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { BlockAssembler, LlmRuntime, createUserMessage, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, LlmRuntime, createUserMessage, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { ExternalCliAdapter, DEFAULT_CONTEXT_WINDOW } from '../src/adapter.ts'
 import { formatPrompt, parseThinkTags, resolveCommandAndArgs } from '../src/process.ts'
 import * as LlmExternalCli from '../src/index.ts'
@@ -452,4 +452,112 @@ describe('Cordis plugin registration', () => {
     expect(assembler.finish).toEqual({ kind: 'stop' })
     expect(assembler.blocks()).toEqual([{ type: 'text', text: 'Hello from Agy CLI' }])
   })
+})
+
+
+describe('CLI model selection', () => {
+  it.each([
+    ['codex', ['exec', '--model', 'chosen', '-c', 'model_reasoning_effort=high']],
+    ['claude', ['--print', '--model', 'chosen', '--effort', 'high']],
+    ['agy', ['--print', '-', '--model', 'chosen', '--effort', 'high']],
+    ['copilot', ['--model', 'chosen', '--reasoning-effort', 'high']],
+  ] as const)('passes the selected model and effort to %s', (command, expected) => {
+    const result = resolveCommandAndArgs({ providers: { route: {
+      command, models: [{ id: 'chosen', reasoningEfforts: { high: 'high' } }],
+    } } }, { provider: 'route', model: 'chosen', reasoningEffort: ReasoningEffortId('high'), messages: [] })
+    expect(result.args).toEqual(expected)
+  })
+
+  it('offers actual models under their configured provider', async () => {
+    const adapter = new ExternalCliAdapter({ providers: { codex: {
+      command: 'codex', models: [{ id: 'chosen', name: 'Chosen model', reasoningEfforts: { high: 'high' } }],
+    } } })
+    expect(await adapter.listModels('codex')).toContainEqual({ provider: 'codex', id: 'chosen', name: 'Chosen model' })
+    expect(await adapter.resolveModel('codex', 'chosen')).toMatchObject({
+      reasoning: { efforts: [{ id: 'high', name: 'high' }] },
+    })
+  })
+
+  it('rejects a disappeared model instead of silently running the CLI default', () => {
+    expect(() => resolveCommandAndArgs({ providers: { codex: { command: 'codex', models: [] } } }, {
+      provider: 'codex', model: 'gone', messages: [],
+    })).toThrow('unavailable')
+  })
+
+  it('rejects argument overrides that would disagree with the chat selection', () => {
+    expect(() => resolveCommandAndArgs({ providers: { codex: {
+      command: 'codex', args: ['exec', '--model=other'], models: [{ id: 'chosen' }],
+    } } }, { provider: 'codex', model: 'chosen', messages: [] })).toThrow('Remove model and effort overrides')
+  })
+
+  it('substitutes custom model and effort arguments without splitting values', () => {
+    expect(resolveCommandAndArgs({ providers: { custom: {
+      command: 'my-cli', args: [], cliType: 'custom', modelArgs: ['model={model}'], effortArgs: ['effort={effort}'],
+      models: [{ id: 'chosen', reasoningEfforts: { high: 'deep thinking' } }],
+    } } }, { provider: 'custom', model: 'chosen', reasoningEffort: ReasoningEffortId('high'), messages: [] }).args)
+      .toEqual(['model=chosen', 'effort=deep thinking'])
+  })
+})
+
+
+it('runs the configured provider with the selected model and effort in a real child process', async () => {
+  const adapter = new ExternalCliAdapter({ providers: { custom: {
+    command: process.execPath, cliType: 'custom',
+    args: ['-e', 'process.stdin.resume(); process.stdin.on("end", () => process.stdout.write(JSON.stringify(process.argv.slice(1))))', '--'],
+    modelArgs: ['{model}'], effortArgs: ['{effort}'],
+    models: [{ id: 'selected-model', reasoningEfforts: { high: 'deep' } }],
+  } } })
+  const assembler = new BlockAssembler()
+  for await (const chunk of adapter.stream({ provider: 'custom', model: 'selected-model',
+    reasoningEffort: ReasoningEffortId('high'), messages: [] })) assembler.push(chunk)
+  expect(assembler.blocks()).toEqual([{ type: 'text', text: '["selected-model","deep"]' }])
+})
+
+
+it.each([
+  [{ command: 'custom-cli', cliType: 'custom' as const, models: [{ id: 'chosen' }] }, undefined, 'modelArgs'],
+  [{ command: 'custom-cli', cliType: 'custom' as const, modelArgs: ['{model}'], models: [{ id: 'chosen', reasoningEfforts: { high: 'high' } }] }, 'high', 'effortArgs'],
+  [{ command: 'codex', models: [{ id: 'chosen' }] }, 'high', 'does not support'],
+])('rejects incomplete model or effort configuration', (profile, effort, diagnostic) => {
+  expect(() => resolveCommandAndArgs({ providers: { route: profile } }, {
+    provider: 'route', model: 'chosen', messages: [], ...effort === undefined ? {} : { reasoningEffort: ReasoningEffortId(effort) },
+  })).toThrow(diagnostic)
+})
+
+it('leaves the CLI model and effort defaults untouched for the default entry', () => {
+  expect(resolveCommandAndArgs({ providers: { codex: { command: 'codex', args: ['exec'] } } }, {
+    provider: 'codex', model: 'codex', messages: [],
+  })).toEqual({ command: 'codex', args: ['exec'] })
+})
+
+it('supports an explicit Off entry without sending an effort option', () => {
+  expect(resolveCommandAndArgs({ providers: { codex: { command: 'codex', models: [{ id: 'chosen', reasoningEfforts: { off: null } }] } } }, {
+    provider: 'codex', model: 'chosen', reasoningEffort: ReasoningEffortId('off'), messages: [],
+  }).args).toEqual(['exec', '--model', 'chosen'])
+})
+
+
+it.each([
+  { models: [{ id: '' }] }, { models: [{ id: 'route' }] }, { models: [{ id: 'duplicate' }, { id: 'duplicate' }] },
+])('refuses ambiguous configured model identifiers before publishing the catalog', ({ models }) => {
+  expect(() => new ExternalCliAdapter({ providers: { route: { command: 'codex', models } } })).toThrow('unique')
+})
+
+it.each([{ '': 'high' }, { high: '' }])('refuses empty reasoning declarations before publishing the catalog', (reasoningEfforts) => {
+  expect(() => new ExternalCliAdapter({ providers: { route: { command: 'codex', models: [{ id: 'chosen', reasoningEfforts }] } } })).toThrow('non-empty')
+})
+
+
+it('withdraws CLI routes, settings entries and discovery when the plugin unloads', async () => {
+  const ctx = new Context()
+  await ctx.plugin(LlmRuntime)
+  const fork = ctx.plugin(LlmExternalCli, { providers: { codex: { command: 'codex', models: [{ id: 'chosen' }] } } })
+  await fork
+  const llm = ctx.llm
+  expect(await llm.discoverModels('llm-external-cli', { provider: 'codex' })).toEqual([{ id: 'chosen' }])
+  await fork.dispose()
+  expect(llm.listProviders()).toEqual([])
+  expect(llm.listConfigurableProviders()).toEqual([])
+  await expect(llm.discoverModels('llm-external-cli', { provider: 'codex' })).rejects.toThrow('no model discovery')
+
 })

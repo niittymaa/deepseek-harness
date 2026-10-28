@@ -183,6 +183,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const [keyDraft, setKeyDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [listBusy, setListBusy] = useState(false)
+  const [argumentDrafts, setArgumentDrafts] = useState<Partial<Record<'modelArgs' | 'effortArgs', string>>>({})
   const { onBusyChange } = props
   useEffect(() => { onBusyChange?.(busy || listBusy) }, [busy, listBusy, onBusyChange])
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -232,10 +233,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     () => layout === 'pi-ai' && props.declared === true ? reasoningLevelChoices(namespace, schema) : [],
     [layout, props.declared, namespace, schema],
   )
-  const editsReasoning = reasoningLevels.length > 0
+  const editsReasoning = reasoningLevels.length > 0 || layout === 'cli'
   const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
     validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
   const modelFailure = validateModels(schema.getPath(draft, ['models']))
+  const cliArgsConflict = layout === 'cli' && modelDrafts(schema.getPath(draft, ['models'])).length > 0
+    && Array.isArray(draft['args']) && draft['args'].some((arg: unknown) => typeof arg === 'string'
+      && (/^(--model|-m|--effort|--reasoning-effort)(=|$)/.test(arg)
+        || /^(?:--config=|-c)?(?:model|model_reasoning_effort)=/.test(arg)))
   const keyFailure = apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
@@ -466,7 +471,49 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               }}
             />
           </div>
-          <p className={styles['advancedHint']}>{t('cliArgsHint')}</p>
+          <p className={styles[cliArgsConflict ? 'error' : 'advancedHint']}>{t(cliArgsConflict ? 'cliArgumentConflict' : 'cliArgsHint')}</p>
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('cliType')}</span>
+            <select className={styles['input']} aria-label={t('cliType')}
+              value={stringAt(draft, 'cliType') ?? stringAt(fallback, 'cliType') ?? (['agy', 'claude', 'codex', 'copilot'].includes(props.provider) ? props.provider : 'custom')}
+              disabled={disabled} onChange={(event) => { setField('cliType', event.target.value) }}>
+              <option value="agy">{t('cliPresetAgy')}</option>
+              <option value="claude">{t('cliPresetClaude')}</option>
+              <option value="codex">{t('cliPresetCodex')}</option>
+              <option value="copilot">{t('cliPresetCopilot')}</option>
+              <option value="custom">{t('cliPresetCustom')}</option>
+            </select>
+          </div>
+          {(['modelArgs', 'effortArgs'] as const).map(key => (
+            <div className={styles['field']} key={key}>
+              <span className={styles['fieldLabel']}>{t(key === 'modelArgs' ? 'cliModelArgs' : 'cliEffortArgs')}</span>
+              <input className={styles['input']} disabled={disabled}
+                aria-label={t(key === 'modelArgs' ? 'cliModelArgs' : 'cliEffortArgs')}
+                value={argumentDrafts[key] ?? JSON.stringify(schema.getPath(draft, [key]) ?? schema.getPath(fallback, [key]) ?? [])}
+                onChange={(event) => {
+                  const raw = event.target.value
+                  setArgumentDrafts(current => ({ ...current, [key]: raw }))
+                  try {
+                    const parsed: unknown = JSON.parse(raw)
+                    if (!Array.isArray(parsed) || !parsed.every((value: unknown) => typeof value === 'string')) return
+                    setDraft(current => parsed.length === 0 ? schema.deletePath(current, [key]) : schema.setPath(current, [key], parsed))
+                    setArgumentDrafts((current) => { const next = { ...current }; Reflect.deleteProperty(next, key); return next })
+                  } catch (error) {
+                    // Incomplete JSON stays in the field until the user finishes editing.
+                    if (!(error instanceof SyntaxError)) throw error
+                  }
+                }} />
+            </div>
+          ))}
+          <p className={styles['advancedHint']}>{t('cliArgumentArrayHint')}</p>
+          <ModelListEditor
+            {...catalogProps}
+            cli
+            reasoningLevels={['low', 'medium', 'high', 'xhigh', 'max']}
+            probe={probe}
+            operations={operations}
+            onBusyChange={setListBusy}
+          />
         </>
       )
     }
@@ -625,7 +672,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       <EditorFooter
         t={t}
         busy={busy}
-        submitDisabled={disabled || layout === 'unknown'
+        submitDisabled={disabled || cliArgsConflict || Object.keys(argumentDrafts).length > 0 || layout === 'unknown'
           || (props.credentialOnly !== true && modelFailure !== undefined)
           || (layout !== 'cli' && shownKeyFailure !== undefined)
           || (layout !== 'cli' && props.credentialRequired === true && keyValue.length === 0)

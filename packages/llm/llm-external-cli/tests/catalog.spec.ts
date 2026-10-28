@@ -1,0 +1,95 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
+import { BlockAssembler } from '@deepseek-ai/dsh-llm'
+import { ExternalCliAdapter } from '../src/adapter.ts'
+import { cliType, discoverCliModels } from '../src/catalog.ts'
+
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(), execFile: vi.fn(),
+}))
+
+afterEach(() => { vi.resetAllMocks() })
+
+/** Complete the mocked executable without starting a process. */
+function output(text: string): void {
+  vi.mocked(execFile).mockImplementation((_command, _args, _options, callback) => {
+    if (typeof callback === 'function') callback(null, text, '')
+    return {} as ReturnType<typeof execFile>
+  })
+}
+
+describe('CLI catalog discovery', () => {
+  it('recognizes executable paths and an explicit protocol', () => {
+    expect(cliType({ command: 'C:\\Tools\\CODEX.EXE' })).toBe('codex')
+    expect(cliType({ command: 'wrapper', cliType: 'agy' })).toBe('agy')
+    expect(cliType({ command: 'unknown' })).toBe('custom')
+  })
+
+  it('parses Agy tab-separated models, preserving names and order and removing duplicates', async () => {
+    output('Fetching available models...\nfirst\tFirst model\nsecond\tSecond model\nfirst\tDuplicate\n')
+    expect(await discoverCliModels({ command: 'agy' })).toEqual([
+      { id: 'first', name: 'First model' }, { id: 'second', name: 'Second model' },
+    ])
+    expect(execFile).toHaveBeenCalledWith('agy', ['models'], expect.objectContaining({ timeout: 120000, maxBuffer: 1048576 }), expect.any(Function))
+  })
+
+  it.each(['', 'Unexpected output', 'bad id\tName'])('rejects an empty or invalid catalog: %s', async (text) => {
+    output(text)
+    await expect(discoverCliModels({ command: 'agy' })).rejects.toThrow()
+  })
+
+  it('does not execute a command for providers without catalog support', async () => {
+    expect(await discoverCliModels({ command: 'codex' })).toEqual([])
+    expect(execFile).not.toHaveBeenCalled()
+  })
+
+  it('forwards cancellation and configured timeout and output bounds', async () => {
+    output('first\tFirst\n')
+    const controller = new AbortController()
+    await discoverCliModels({ command: 'agy', timeoutMs: 25, discoveryMaxBytes: 512 }, controller.signal)
+    expect(execFile).toHaveBeenCalledWith('agy', ['models'], expect.objectContaining({ signal: controller.signal, timeout: 25, maxBuffer: 512 }), expect.any(Function))
+  })
+})
+
+
+it('merges discovered models with manual names and reasoning settings', async () => {
+  output('first\tDiscovered name\nsecond\tSecond\n')
+  const adapter = new ExternalCliAdapter({ providers: { agy: { command: 'agy', models: [
+    { id: 'first', name: 'Manual name', reasoningEfforts: { high: 'high' } },
+  ] } } })
+  expect(await adapter.listModels('agy')).toEqual([
+    { provider: 'agy', id: 'agy', name: 'agy (CLI default)' },
+    { provider: 'agy', id: 'first', name: 'Manual name' }, { provider: 'agy', id: 'second', name: 'Second' },
+  ])
+  expect(await adapter.resolveModel('agy', 'first')).toMatchObject({ reasoning: { efforts: [{ id: 'high', name: 'high' }] } })
+})
+
+it('reports discovery failures while retaining manually configured chat models', async () => {
+  vi.mocked(execFile).mockImplementation((_command, _args, _options, callback) => {
+    if (typeof callback === 'function') callback(new Error('CLI unavailable'), '', '')
+    return {} as ReturnType<typeof execFile>
+  })
+  await expect(discoverCliModels({ command: 'agy' })).rejects.toThrow('CLI unavailable')
+  const adapter = new ExternalCliAdapter({ providers: { agy: { command: 'agy', models: [{ id: 'manual' }] } } })
+  expect(await adapter.listModels('agy')).toContainEqual({ provider: 'agy', id: 'manual', name: 'manual' })
+  await expect(new ExternalCliAdapter({ providers: { agy: { command: 'agy' } } }).listModels('agy')).rejects.toThrow('CLI unavailable')
+})
+
+
+it('uses the Agy executable for an explicit protocol and the identifier for an empty display name', async () => {
+  output('first\t  \n')
+  expect(await discoverCliModels({ cliType: 'agy' })).toEqual([{ id: 'first', name: 'first' }])
+  expect(execFile).toHaveBeenCalledWith('agy', ['models'], expect.any(Object), expect.any(Function))
+})
+
+
+it('executes an automatically discovered model on its configured provider', async () => {
+  output('discovered\tDiscovered model\n')
+  const adapter = new ExternalCliAdapter({ providers: { route: {
+    command: process.execPath, cliType: 'agy', modelArgs: ['{model}'],
+    args: ['-e', 'process.stdin.resume(); process.stdin.on("end", () => process.stdout.write(process.argv[1]))', '--'],
+  } } })
+  const assembler = new BlockAssembler()
+  for await (const chunk of adapter.stream({ provider: 'route', model: 'discovered', messages: [] })) assembler.push(chunk)
+  expect(assembler.blocks()).toEqual([{ type: 'text', text: 'discovered' }])
+})
