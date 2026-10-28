@@ -172,9 +172,22 @@ if ($Rebuild) {
     $buildReason = "no previous build stamp found"
 } else {
     try {
-        $stamp = Get-Content $stampFile -Raw | ConvertFrom-Json
-        $stampCommit = $stamp.commit
-        $stampTime = [DateTime]$stamp.builtAt
+        $rawStamp = Get-Content $stampFile -Raw
+        $stampCommit = $null
+        $stampTime = [DateTime]::MinValue
+
+        if ($rawStamp -match '^\s*\{') {
+            $stamp = $rawStamp | ConvertFrom-Json
+            $stampCommit = $stamp.commit
+            if ($stamp.builtAt) {
+                $stampTime = [DateTime]$stamp.builtAt
+            }
+        } elseif ($rawStamp -match '^[0-9a-fA-F]{7,40}\s*$') {
+            $stampCommit = $rawStamp.Trim()
+            $stampTime = (Get-Item $stampFile).LastWriteTimeUtc
+        } else {
+            throw "unrecognized build stamp format"
+        }
 
         if ($currentCommit -and ($currentCommit -ne $stampCommit)) {
             $shortPrev = if ($stampCommit.Length -ge 7) { $stampCommit.Substring(0, 7) } else { $stampCommit }
