@@ -114,7 +114,3 @@ export function apply(ctx: Context, config: Config | ExternalCliOptions = {}): v
     }
   })
 }
-
-Object.assign(apply, { inject })
-
-export default apply
